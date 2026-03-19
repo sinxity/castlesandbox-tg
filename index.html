@@ -25,18 +25,18 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
   #topbar{position:absolute;top:env(safe-area-inset-top,8px);left:8px;right:8px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:50}
   #topbar>*{pointer-events:auto}
   #map-btns{display:flex;gap:5px}
-  .tbtn{background:rgba(10,20,35,0.82);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.18);border-radius:10px;padding:7px 11px;font-size:11px;font-weight:600;color:#cce4ff;cursor:pointer;letter-spacing:.2px}
+  .tbtn{background:linear-gradient(180deg,#3a3a3a,#252525);border:1px solid #555;border-radius:6px;padding:6px 10px;font-size:11px;font-weight:700;color:#ddd;cursor:pointer;letter-spacing:.2px;box-shadow:0 2px 0 #111,inset 0 1px 0 rgba(255,255,255,0.1);text-shadow:0 1px 2px rgba(0,0,0,0.8)}
   .tbtn:active{opacity:.7}
 
   /* STATS */
-  #stats{background:rgba(10,20,35,0.82);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.18);border-radius:10px;padding:7px 10px;font-size:10px;color:rgba(255,255,255,0.6);line-height:1.9;min-width:80px;text-align:right}
-  #stats b{color:#fff;font-weight:600}
+  #stats{background:linear-gradient(180deg,rgba(30,20,10,0.92),rgba(20,15,5,0.92));backdrop-filter:blur(8px);border:1px solid #554400;border-radius:6px;padding:6px 10px;font-size:10px;color:#aa9966;line-height:1.9;min-width:80px;text-align:right;box-shadow:0 2px 8px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,200,50,0.1)}
+  #stats b{color:#ffd700;font-weight:700;text-shadow:0 0 6px rgba(255,215,0,0.3)}
 
   /* EVENT LOG */
   #elog{position:absolute;bottom:4px;left:8px;font-size:10px;color:rgba(255,255,255,0.88);line-height:1.65;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,0.9);z-index:10;max-width:55%}
 
   /* ZOOM INDICATOR */
-  #zoom-indicator{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.55);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:20}
+  #zoom-indicator{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(180deg,#3a3a3a,#222);border:1px solid #555;color:#ffd700;font-size:12px;font-weight:700;padding:6px 16px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,0.6);text-shadow:0 0 8px rgba(255,215,0,0.5)}
 
   /* BOTTOM PANEL */
   #bot{background:rgba(12,22,38,0.97);backdrop-filter:blur(12px);border-top:0.5px solid rgba(255,255,255,0.1);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -650,6 +650,67 @@ function getTerrainColor(t,x,y){
   return p[n];
 }
 
+function renderOverview(){
+  // Draw simplified terrain
+  for(let y=0;y<H;y+=6) for(let x=0;x<W;x+=6){
+    const cell=grid[y]&&grid[y][x];
+    if(!cell) continue;
+    const t=cell.type;
+    let r,g,b;
+    if(t==='water'){r=13;g=45;b=95;}
+    else if(t==='mountain'||t==='snow'){r=130;g=130;b=148;}
+    else if(t==='desert'){r=200;g=165;b=80;}
+    else if(t==='sand'){r=180;g=155;b=70;}
+    else if(t==='rock'){r=90;g=90;b=105;}
+    else{r=48;g=88;b=32;} // grass default
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.fillRect(x,y,6,6);
+  }
+  // Draw territory colors prominently
+  castles.forEach(c=>{
+    if(!c.cells||c.cells.length<2) return;
+    const col=TCRGB[c.team]||'128,128,128';
+    for(let i=0;i<c.cells.length;i+=2){
+      ctx.fillStyle=`rgba(${col},0.35)`;
+      ctx.fillRect(c.cells[i],c.cells[i+1],4,4);
+    }
+    // Bold border
+    const cellSet=new Set();
+    for(let i=0;i<c.cells.length;i+=2) cellSet.add(c.cells[i+1]*W+c.cells[i]);
+    ctx.fillStyle=`rgba(${col},0.95)`;
+    for(let i=0;i<c.cells.length;i+=2){
+      const x=c.cells[i],y=c.cells[i+1];
+      const border=!cellSet.has(y*W+(x-1))||!cellSet.has(y*W+(x+1))||!cellSet.has((y-1)*W+x)||!cellSet.has((y+1)*W+x);
+      if(border) ctx.fillRect(x,y,3,3);
+    }
+  });
+  // Draw castle icons in overview
+  castles.forEach(c=>{
+    const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H);
+    const tc=TC[c.team];
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx-12,cy-8,24,16);
+    ctx.fillStyle=tc;ctx.fillRect(cx-11,cy-7,22,14);
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx-10,cy-6,20,12);
+    ctx.fillStyle='#fff';ctx.font='bold 9px monospace';ctx.textAlign='center';
+    ctx.fillText('🏰',cx,cy+4);
+    ctx.textAlign='left';
+    // Castle power label
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx-15,cy+8,30,10);
+    ctx.fillStyle=tc;ctx.font='bold 7px monospace';ctx.textAlign='center';
+    ctx.fillText('⚡'+Math.floor(c.power),cx,cy+16);
+    ctx.textAlign='left';
+  });
+  // Armies visible in overview
+  armies.forEach(a=>{
+    const px=Math.round(a.x*W),py=Math.round(a.y*H);
+    ctx.fillStyle=TC[a.team];
+    ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(px-4,py-7,8,4);
+    ctx.fillStyle='#fff';ctx.font='5px monospace';ctx.textAlign='center';
+    ctx.fillText('⚔',px,py-4);ctx.textAlign='left';
+  });
+}
+
 function render(){
   // Draw terrain from grid
   ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);
@@ -684,6 +745,31 @@ function render(){
   updateParticles();
   // Day/night overlay
   updateDayNight();
+  // Low-zoom: draw pixelated territory overview
+  if(camZ<0.5) drawZoomedOutBorders();
+}
+
+function drawZoomedOutBorders(){
+  // Draw colored territory border lines between castles
+  castles.forEach(c=>{
+    if(!c.cells||c.cells.length<2) return;
+    const col=TCRGB[c.team]||'128,128,128';
+    const cellSet=new Set();
+    for(let i=0;i<c.cells.length;i+=2) cellSet.add(c.cells[i+1]*W+c.cells[i]);
+    ctx.fillStyle=`rgba(${col},0.9)`;
+    for(let i=0;i<c.cells.length;i+=2){
+      const x=c.cells[i],y=c.cells[i+1];
+      const border=!cellSet.has(y*W+(x-1))||!cellSet.has(y*W+(x+1))||
+                   !cellSet.has((y-1)*W+x)||!cellSet.has((y+1)*W+x);
+      if(border) ctx.fillRect(x,y,4,4);// thicker border when zoomed out
+    }
+    // Castle name label when zoomed out
+    const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H);
+    const names={red:'Красные',blue:'Синие',green:'Зелёные',gold:'Золотые'};
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx-20,cy-20,40,10);
+    ctx.fillStyle=`rgb(${col})`;ctx.font='bold 8px monospace';ctx.textAlign='center';
+    ctx.fillText(names[c.team]||c.team,cx,cy-12);ctx.textAlign='left';
+  });
 }
 
 function updateDayNight(){
@@ -772,31 +858,51 @@ function drawSprite(t,x,y,owner){
 }
 
 function drawTree(x,y){
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+6,5,2);
+  // Ground shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+1,y+8,8,2);
   // Trunk
-  ctx.fillStyle='#6b3a1f';ctx.fillRect(x+3,y+5,2,3);
-  // Canopy layers - 3 tiers for volume
-  ctx.fillStyle='#1a4a08';ctx.fillRect(x+1,y+4,6,2);
-  ctx.fillStyle='#235a10';ctx.fillRect(x+2,y+2,4,3);
-  ctx.fillStyle='#2d6e18';ctx.fillRect(x+3,y+1,2,2);
-  // Highlight
-  ctx.fillStyle='#3a8820';ctx.fillRect(x+3,y+1,1,1);
-  ctx.fillStyle='#3a8820';ctx.fillRect(x+2,y+2,1,1);
+  ctx.fillStyle='#5a2e0e';ctx.fillRect(x+4,y+6,2,4);
+  ctx.fillStyle='#7a4a1e';ctx.fillRect(x+4,y+6,1,4);// trunk highlight
+  // Roots
+  ctx.fillStyle='#5a2e0e';ctx.fillRect(x+2,y+9,2,1);ctx.fillRect(x+6,y+9,2,1);
+  // Bottom canopy - wide
+  ctx.fillStyle='#143a06';ctx.fillRect(x+0,y+5,10,3);
+  ctx.fillStyle='#1a4a08';ctx.fillRect(x+1,y+4,8,3);
+  // Mid canopy
+  ctx.fillStyle='#1e5a0a';ctx.fillRect(x+2,y+3,6,3);
+  ctx.fillStyle='#256810';ctx.fillRect(x+3,y+2,4,3);
+  // Top canopy
+  ctx.fillStyle='#2d7818';ctx.fillRect(x+3,y+1,4,2);
+  ctx.fillStyle='#388820';ctx.fillRect(x+4,y+0,2,2);
+  // Highlights (light from top-left)
+  ctx.fillStyle='#4a9a28';ctx.fillRect(x+4,y,1,1);
+  ctx.fillStyle='#3a8820';ctx.fillRect(x+2,y+3,1,1);ctx.fillRect(x+3,y+1,1,1);
+  // Dark sides
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+8,y+4,2,4);
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+7,y+2,2,3);
 }
 
 function drawPine(x,y){
   // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+7,4,1);
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+2,y+9,6,2);
   // Trunk
-  ctx.fillStyle='#5a3010';ctx.fillRect(x+3,y+6,2,2);
-  // Pine tiers
-  ctx.fillStyle='#0a3a05';ctx.fillRect(x+2,y+5,4,2);
-  ctx.fillStyle='#143a08';ctx.fillRect(x+1,y+3,6,3);
-  ctx.fillStyle='#0d3005';ctx.fillRect(x+2,y+1,4,3);
-  ctx.fillStyle='#1a4a0a';ctx.fillRect(x+3,y+0,2,2);
-  // Snow tip highlight
-  ctx.fillStyle='rgba(220,235,255,0.5)';ctx.fillRect(x+3,y,1,1);
+  ctx.fillStyle='#4a2808';ctx.fillRect(x+4,y+7,2,3);
+  ctx.fillStyle='#6a3a18';ctx.fillRect(x+4,y+7,1,3);
+  // Pine tiers - wider at base
+  ctx.fillStyle='#071e03';ctx.fillRect(x+1,y+6,8,2);
+  ctx.fillStyle='#0a2804';ctx.fillRect(x+2,y+5,6,2);
+  ctx.fillStyle='#0d3205';ctx.fillRect(x+1,y+4,8,2);
+  ctx.fillStyle='#103808';ctx.fillRect(x+2,y+3,6,2);
+  ctx.fillStyle='#0d3205';ctx.fillRect(x+3,y+2,4,2);
+  ctx.fillStyle='#143e08';ctx.fillRect(x+3,y+1,4,2);
+  ctx.fillStyle='#1a4a0a';ctx.fillRect(x+4,y+0,2,2);
+  // Highlights left side
+  ctx.fillStyle='#1a5a10';ctx.fillRect(x+2,y+4,1,2);ctx.fillRect(x+3,y+2,1,1);
+  ctx.fillStyle='#206018';ctx.fillRect(x+4,y+0,1,1);
+  // Dark right side
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+8,y+5,2,4);ctx.fillRect(x+7,y+3,2,3);
+  // Snow on tips (for northern pines)
+  ctx.fillStyle='rgba(220,235,255,0.4)';ctx.fillRect(x+4,y,1,1);ctx.fillRect(x+2,y+4,1,1);
 }
 
 function drawOre(x,y){
@@ -845,28 +951,42 @@ function drawCactus(x,y){
 }
 
 function drawHouse(x,y,owner){
+  // Get roof color from owner faction
+  const roofColors={
+    red:['#c0392b','#e74c3c','#ff6655'],
+    blue:['#1a5a99','#2471a3','#3498db'],
+    green:['#1a6632','#1e8449','#27ae60'],
+    gold:['#b8860b','#d4ac0d','#f1c40f'],
+  };
+  const rc=roofColors[owner]||['#5a4a3a','#7a6a5a','#9a8a7a'];
   // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+7,7,2);
-  // Foundation
-  ctx.fillStyle='#7a6050';ctx.fillRect(x+1,y+5,7,3);
-  // Walls
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(x+2,y+8,8,2);
+  // Stone foundation
+  ctx.fillStyle='#5a4a38';ctx.fillRect(x+1,y+6,7,4);
+  ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fillRect(x+1,y+6,7,1);
+  // Timber walls
   ctx.fillStyle='#c8a878';ctx.fillRect(x+1,y+4,7,3);
-  // Wall shading
-  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+7,y+4,1,3);
-  // Roof
-  ctx.fillStyle='#882222';ctx.fillRect(x+0,y+2,8,3);
-  ctx.fillStyle='#aa2a2a';ctx.fillRect(x+1,y+1,6,2);
-  ctx.fillStyle='#cc3333';ctx.fillRect(x+2,y+0,4,2);
-  // Roof highlight
-  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(x+2,y,2,1);
-  // Door
-  ctx.fillStyle='#3a2010';ctx.fillRect(x+3,y+5,2,3);
-  ctx.fillStyle='rgba(255,200,100,0.3)';ctx.fillRect(x+3,y+5,1,1);
-  // Window
+  ctx.fillStyle='#b09060';ctx.fillRect(x+1,y+5,7,1); // beam
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+7,y+4,1,6);// side shadow
+  // Roof - 3 layers for depth
+  ctx.fillStyle=rc[0];ctx.fillRect(x+0,y+3,9,2);
+  ctx.fillStyle=rc[1];ctx.fillRect(x+1,y+1,7,3);
+  ctx.fillStyle=rc[2];ctx.fillRect(x+2,y+0,5,2);
+  // Roof ridge highlight
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(x+2,y,3,1);
+  // Roof shadow underside
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+0,y+4,9,1);
+  // Door (arched)
+  ctx.fillStyle='#2a1808';ctx.fillRect(x+3,y+5,3,5);
+  ctx.fillStyle='#3a2818';ctx.fillRect(x+3,y+5,3,1);// arch
+  ctx.fillStyle='rgba(255,180,80,0.2)';ctx.fillRect(x+3,y+5,1,1);// door light
+  // Windows with shutters
   ctx.fillStyle='#88ccff';ctx.fillRect(x+1,y+4,2,2);
-  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fillRect(x+1,y+4,1,1);
-  // Team color strip on roof
-  if(owner&&TC[owner]){ctx.fillStyle=TC[owner];ctx.fillRect(x+1,y+1,6,1);}
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillRect(x+1,y+4,1,1);
+  ctx.fillStyle=rc[0];ctx.fillRect(x+0,y+4,1,2);ctx.fillRect(x+3,y+4,1,2);// shutters
+  // Chimney
+  ctx.fillStyle='#666';ctx.fillRect(x+6,y-1,2,3);
+  ctx.fillStyle='#444';ctx.fillRect(x+6,y-1,2,1);
 }
 
 function hasWallAt(x,y){
@@ -1492,12 +1612,25 @@ wrap.addEventListener('wheel',e=>{
 } // end setupEvents
 
 // ── TOOLS UI ──────────────────────────────────────────────────
+function getToolIcon(id){
+  const icons={
+    water:'🌊',sand:'🏖',grass:'🌿',jungle:'🌴',desert:'🏜',
+    rock:'🪨',mountain:'⛰',snow:'❄️',lava:'🌋',
+    tree:'🌳',pine:'🌲',cactus:'🌵',ore:'⛏',gold:'💛',crystal:'💎',
+    bomb:'💣',fire:'🔥',meteor:'☄️',flood:'💧',plague:'☠️',lightning:'⚡',
+    house:'🏠',wall:'🧱',gate:'🚪',
+    vil_red:'🔴',vil_blue:'🔵',vil_green:'🟢',vil_gold:'🟡',
+  };
+  return icons[id]||'❓';
+}
+
 function renderTools(){
   const box=document.getElementById('tbx');box.innerHTML='';
   TABS[curTab].forEach(t=>{
     const el=document.createElement('div');
     el.className='tl'+(curTool===t.id?' active':'');
-    el.innerHTML=`<div class="td" style="background:${t.color}"></div><span class="tn">${t.label}</span>`;
+    const icon=getToolIcon(t.id);
+    el.innerHTML=`<div class="td" style="background:${t.color};display:flex;align-items:center;justify-content:center;font-size:13px">${icon}</div><span class="tn">${t.label}</span>`;
     el.addEventListener('touchstart',ev=>{ev.stopPropagation();curTool=t.id;renderTools();},{passive:true});
     el.addEventListener('click',()=>{curTool=t.id;renderTools();});
     box.appendChild(el);
