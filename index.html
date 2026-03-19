@@ -1074,48 +1074,69 @@ function explode(cx,cy,R,lava){
 const SINGLE_PLACE=new Set(['house','gate','tree','pine','ore','gold','crystal','cactus',
   'vil_red','vil_blue','vil_green','vil_gold','bomb','meteor','lightning']);
 
-function applyTool(x,y,cx,cy){
-  if(x<0||y<0||x>=W||y>=H) return;
-  const cell=grid[y][x];
-  // Single-place tools: only act at exact click center
-  if(SINGLE_PLACE.has(curTool)){
-    if(x!==cx||y!==cy) return;
+// Sprite tools placed on 10px grid by dragging
+const SPRITE_TOOLS=new Set(['house','tree','pine','ore','gold','crystal','cactus','wall','gate']);
+// One-shot tools: only fire once per touch/click
+const ONESHOT_TOOLS=new Set(['bomb','meteor','lightning','vil_red','vil_blue','vil_green','vil_gold']);
+let lastSpriteCell={x:-99,y:-99}; // prevent double-placing on same cell
+
+function placeSprite(cx,cy){
+  // Snap to 10px grid
+  const sx=Math.floor(cx/10)*10;
+  const sy=Math.floor(cy/10)*10;
+  if(sx<0||sy<0||sx>=W||sy>=H) return;
+  // Don't place on same cell twice in one stroke
+  if(sx===lastSpriteCell.x&&sy===lastSpriteCell.y) return;
+  lastSpriteCell={x:sx,y:sy};
+  const cell=grid[sy][sx];
+  if(!cell) return;
+  cell.type=curTool;
+  cell.owner=null;
+}
+
+function applyTool(cx,cy,isFirst){
+  if(cx<0||cy<0||cx>=W||cy>=H) return;
+
+  // One-shot: only on first touch
+  if(ONESHOT_TOOLS.has(curTool)){
+    if(!isFirst) return;
     if(curTool==='bomb') explode(cx,cy,Math.round(brushSz*4),false);
     else if(curTool==='meteor') explode(cx,cy,Math.round(brushSz*6),true);
-    else if(curTool==='lightning'){cell.type='burned';bots=bots.filter(b=>!(b.x===cx&&b.y===cy));}
+    else if(curTool==='lightning'){
+      grid[cy][cx].type='burned';
+      bots=bots.filter(b=>!(b.x===cx&&b.y===cy));
+    }
     else if(curTool.startsWith('vil_')){
       if(!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
       placeCastle(cx,cy,curTool.replace('vil_',''));
-    } else if(curTool==='house'){
-      // House: snap to 10px grid
-      const sx=Math.floor(cx/10)*10,sy=Math.floor(cy/10)*10;
-      if(sx>=0&&sy>=0&&sx<W&&sy<H){grid[sy][sx].type='house';if(grid[sy][sx]) grid[sy][sx].owner=null;}
-    } else {
-      // Other sprites: snap to 10px grid
-      const sx=Math.floor(cx/10)*10,sy=Math.floor(cy/10)*10;
-      if(sx>=0&&sy>=0&&sx<W&&sy<H) grid[sy][sx].type=curTool;
     }
     return;
   }
-  // Brush tools: fill area
-  if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
-  else if(curTool==='flood'){cell.type='water';}
-  else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===x&&b.y===y));}
-  else if(curTool==='wall'){
-    // Walls snap to 10px grid for clean lines
-    const sx=Math.floor(x/10)*10,sy=Math.floor(y/10)*10;
-    if(sx>=0&&sy>=0&&sx<W&&sy<H) grid[sy][sx].type='wall';
-  }
-  else{cell.type=curTool;}
-}
 
-function paintAt(sx,sy){
-  const{x:cx,y:cy}=screenToCanvas(sx,sy);
+  // Sprite tools: place on grid by dragging
+  if(SPRITE_TOOLS.has(curTool)){
+    placeSprite(cx,cy);
+    return;
+  }
+
+  // Terrain brush tools: fill circle area
   const r=Math.max(1,brushSz);
   for(let dy=0-r;dy<=r;dy++) for(let dx=0-r;dx<=r;dx++){
     if(dx*dx+dy*dy>r*r) continue;
-    applyTool(Math.round(cx+dx),Math.round(cy+dy),Math.round(cx),Math.round(cy));
+    const nx=cx+dx,ny=cy+dy;
+    if(nx<0||ny<0||nx>=W||ny>=H) continue;
+    const cell=grid[ny][nx];
+    if(!cell) continue;
+    if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
+    else if(curTool==='flood'){cell.type='water';}
+    else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===nx&&b.y===ny));}
+    else cell.type=curTool;
   }
+}
+
+function paintAt(sx,sy,isFirst){
+  const{x:cx,y:cy}=screenToCanvas(sx,sy);
+  applyTool(Math.round(cx),Math.round(cy),isFirst);
 }
 
 // ── CASTLE ────────────────────────────────────────────────────
@@ -1580,7 +1601,7 @@ wrap.addEventListener('touchmove',e=>{
       lastPanX=t.clientX;lastPanY=t.clientY;
       clampCam();
     } else if(isDrawing){
-      paintAt(t.clientX,t.clientY);
+      paintAt(t.clientX,t.clientY,false);
     }
   }
 },{passive:false});
@@ -1594,12 +1615,12 @@ wrap.addEventListener('touchend',e=>{
 // Mouse support (desktop testing)
 wrap.addEventListener('mousedown',e=>{
   if(isPanMode){panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;isDrawing=true;}
-  else{isDrawing=true;paintAt(e.clientX,e.clientY);}
+  else{lastSpriteCell={x:-99,y:-99};isDrawing=true;paintAt(e.clientX,e.clientY,true);}
 });
 wrap.addEventListener('mousemove',e=>{
   if(!isDrawing) return;
   if(isPanMode){camX=panStartCamX-(e.clientX-panStartX);camY=panStartCamY-(e.clientY-panStartY);clampCam();}
-  else paintAt(e.clientX,e.clientY);
+  else paintAt(e.clientX,e.clientY,false);
 });
 wrap.addEventListener('mouseup',()=>isDrawing=false);
 wrap.addEventListener('mouseleave',()=>isDrawing=false);
