@@ -352,6 +352,41 @@ function buildMapCache(){
     for(let i=1;i<rv.length;i++) mc.lineTo(rv[i][0]*W,rv[i][1]*H);
     mc.stroke();
   });
+  // Sync grid with map so terrain is interactive
+  initGridFromMap();
+}
+
+function initGridFromMap(){
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const nx=x/W,ny=y/H;
+    const land=isLand(x,y);
+    if(!land){grid[y][x].type='water';continue;}
+    const ms=getMtn(nx,ny,W);
+    const fs=getFst(nx,ny,W);
+    if(ms>0.72||(ny<0.15&&ms>0.2)) grid[y][x].type='snow';
+    else if(ms>0.45) grid[y][x].type='mountain';
+    else if(ms>0.2) grid[y][x].type='rock';
+    else{
+      const coast=!isLand(x-1,y)||!isLand(x+1,y)||!isLand(x,y-1)||!isLand(x,y+1)||
+                  !isLand(x-2,y)||!isLand(x+2,y)||!isLand(x,y-2)||!isLand(x,y+2);
+      if(coast) grid[y][x].type='sand';
+      else if(fs>0.35) grid[y][x].type=ny<0.3?'pine':'tree';
+      else grid[y][x].type='grass';
+    }
+  }
+  // Add rivers as water in grid
+  RIVERS.forEach(rv=>{
+    for(let i=0;i<rv.length-1;i++){
+      const x0=Math.round(rv[i][0]*W),y0=Math.round(rv[i][1]*H);
+      const x1=Math.round(rv[i+1][0]*W),y1=Math.round(rv[i+1][1]*H);
+      const steps=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));
+      for(let s=0;s<=steps;s++){
+        const rx=Math.round(x0+(x1-x0)*s/steps);
+        const ry=Math.round(y0+(y1-y0)*s/steps);
+        if(rx>=0&&ry>=0&&rx<W&&ry<H) grid[ry][rx].type='water';
+      }
+    }
+  });
 }
 
 // ── TERRITORY ─────────────────────────────────────────────────
@@ -578,34 +613,221 @@ const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',
   house:'#a0522d',wall:'#888899',gate:'#665533',
   vil_red:'#c0392b',vil_blue:'#2471a3',vil_green:'#1e8449',vil_gold:'#d4ac0d'};
 
+// Terrain base colors (2x2 px per cell)
+const TBASE={
+  water:    [[13,45,95],[18,75,148],[24,95,170]],
+  sand:     [[200,165,70],[210,175,80],[220,185,90]],
+  grass:    [[48,88,32],[55,100,38],[65,112,46]],
+  jungle:   [[15,78,8],[20,90,12],[28,108,18]],
+  desert:   [[205,155,70],[215,165,80],[225,175,90]],
+  rock:     [[88,88,100],[95,95,108],[105,105,120]],
+  mountain: [[122,122,140],[130,130,148],[145,145,165]],
+  snow:     [[215,222,238],[220,228,245],[232,240,255]],
+  lava:     [[180,40,0],[200,50,0],[220,60,0]],
+  tree:     [[25,72,14],[30,80,18],[38,92,25]],
+  pine:     [[16,55,5],[20,65,8],[26,75,12]],
+  burned:   [[35,32,32],[38,35,35],[45,40,40]],
+  plague:   [[35,50,12],[38,55,15],[45,65,20]],
+};
+
+function getTerrainColor(t,x,y){
+  const p=TBASE[t];
+  if(!p) return null;
+  const n=hash(x*7+y*13,x*3+y*17)&2;
+  return p[n];
+}
+
 function render(){
-  // Base map
-  if(mapCache) ctx.drawImage(mapCache,0,0);
-  else{ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);}
-  // Draw painted grid cells on top (3x3 pixel blocks for visibility)
-  const SZ=3;
-  for(let y=0;y<H;y+=SZ) for(let x=0;x<W;x+=SZ){
+  // Draw terrain from grid
+  ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);
+  for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){
     const cell=grid[y]&&grid[y][x];
     if(!cell) continue;
     const t=cell.type;
-    if(t==='water') continue; // water = show base map
-    const c=GCOL[t];
-    if(!c) continue;
     if(t==='fire'){
-      ctx.fillStyle=(tick+x+y)%3===0?'#ff8800':'#ff4400';
-      // Spawn fire particles occasionally
-      if(Math.random()<0.04) spawnFireParticle(x,y);
+      const f=(tick+x+y)%4;
+      ctx.fillStyle=f<2?'#ff6600':f===2?'#ff9900':'#ffcc00';
+      if(Math.random()<0.03) spawnFireParticle(x,y);
     } else {
-      ctx.fillStyle=c;
+      const col=getTerrainColor(t,x,y);
+      if(!col) continue;
+      ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
     }
-    ctx.fillRect(x,y,SZ,SZ);
+    ctx.fillRect(x,y,2,2);
   }
-  // Territory + castles + armies + bots
+  // Draw sprites (trees, ores, buildings) on top
+  drawSprites();
+  // Territory overlay
   ctx.drawImage(terrCanvas,0,0);
   castles.forEach(drawCastle);
   armies.forEach(drawArmy);
   bots.forEach(drawBot);
   updateParticles();
+}
+
+// ── SPRITE LAYER ──────────────────────────────────────────────
+// Sprites drawn at fixed 8x8 px regardless of brush size
+// Only drawn every 8px to avoid crowding
+function drawSprites(){
+  const STEP=8;
+  for(let y=0;y<H;y+=STEP) for(let x=0;x<W;x+=STEP){
+    const cell=grid[y]&&grid[y][x];if(!cell) continue;
+    drawSprite(cell.type,x,y,cell.owner);
+  }
+}
+
+function drawSprite(t,x,y,owner){
+  switch(t){
+    case 'tree':   drawTree(x,y); break;
+    case 'pine':   drawPine(x,y); break;
+    case 'ore':    drawOre(x,y); break;
+    case 'gold':   drawGold(x,y); break;
+    case 'crystal':drawCrystal(x,y); break;
+    case 'cactus': drawCactus(x,y); break;
+    case 'house':  drawHouse(x,y,owner); break;
+    case 'wall':   drawWall(x,y); break;
+    case 'gate':   drawGate(x,y); break;
+  }
+}
+
+function drawTree(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+6,5,2);
+  // Trunk
+  ctx.fillStyle='#6b3a1f';ctx.fillRect(x+3,y+5,2,3);
+  // Canopy layers - 3 tiers for volume
+  ctx.fillStyle='#1a4a08';ctx.fillRect(x+1,y+4,6,2);
+  ctx.fillStyle='#235a10';ctx.fillRect(x+2,y+2,4,3);
+  ctx.fillStyle='#2d6e18';ctx.fillRect(x+3,y+1,2,2);
+  // Highlight
+  ctx.fillStyle='#3a8820';ctx.fillRect(x+3,y+1,1,1);
+  ctx.fillStyle='#3a8820';ctx.fillRect(x+2,y+2,1,1);
+}
+
+function drawPine(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+7,4,1);
+  // Trunk
+  ctx.fillStyle='#5a3010';ctx.fillRect(x+3,y+6,2,2);
+  // Pine tiers
+  ctx.fillStyle='#0a3a05';ctx.fillRect(x+2,y+5,4,2);
+  ctx.fillStyle='#143a08';ctx.fillRect(x+1,y+3,6,3);
+  ctx.fillStyle='#0d3005';ctx.fillRect(x+2,y+1,4,3);
+  ctx.fillStyle='#1a4a0a';ctx.fillRect(x+3,y+0,2,2);
+  // Snow tip highlight
+  ctx.fillStyle='rgba(220,235,255,0.5)';ctx.fillRect(x+3,y,1,1);
+}
+
+function drawOre(x,y){
+  // Rock base
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+1,y+6,6,2);
+  ctx.fillStyle='#444450';ctx.fillRect(x+1,y+2,6,5);
+  ctx.fillStyle='#555560';ctx.fillRect(x+2,y+1,4,5);
+  // Ore veins
+  ctx.fillStyle='#c05520';ctx.fillRect(x+3,y+3,2,2);
+  ctx.fillStyle='#e06030';ctx.fillRect(x+4,y+3,1,1);
+  ctx.fillStyle='#c05520';ctx.fillRect(x+2,y+4,1,1);
+  // Highlight
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(x+2,y+1,2,1);
+}
+
+function drawGold(x,y){
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+1,y+6,6,2);
+  ctx.fillStyle='#554400';ctx.fillRect(x+1,y+2,6,5);
+  ctx.fillStyle='#665500';ctx.fillRect(x+2,y+1,4,5);
+  ctx.fillStyle='#e6b800';ctx.fillRect(x+3,y+2,2,3);
+  ctx.fillStyle='#ffe040';ctx.fillRect(x+3,y+2,1,1);
+  ctx.fillStyle='#ffee80';ctx.fillRect(x+4,y+3,1,1);
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(x+2,y+1,2,1);
+}
+
+function drawCrystal(x,y){
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+7,4,1);
+  // Crystal shaft
+  ctx.fillStyle='#3355aa';ctx.fillRect(x+3,y+2,2,6);
+  ctx.fillStyle='#6688cc';ctx.fillRect(x+2,y+3,4,4);
+  ctx.fillStyle='#88aaee';ctx.fillRect(x+3,y+1,2,3);
+  // Crystal tip
+  ctx.fillStyle='#aaccff';ctx.fillRect(x+3,y+0,2,2);
+  // Sparkle
+  ctx.fillStyle='#ffffff';ctx.fillRect(x+3,y,1,1);
+  ctx.fillStyle='rgba(150,200,255,0.5)';ctx.fillRect(x+2,y+3,1,1);
+}
+
+function drawCactus(x,y){
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+2,y+7,4,1);
+  ctx.fillStyle='#2a5a10';ctx.fillRect(x+3,y+1,2,7);
+  ctx.fillStyle='#2a5a10';ctx.fillRect(x+1,y+2,2,2);
+  ctx.fillStyle='#2a5a10';ctx.fillRect(x+5,y+4,2,2);
+  ctx.fillStyle='#3a7a18';ctx.fillRect(x+3,y+1,1,2);
+  ctx.fillStyle='rgba(255,255,200,0.4)';ctx.fillRect(x+3,y+1,1,1);
+}
+
+function drawHouse(x,y,owner){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+7,7,2);
+  // Foundation
+  ctx.fillStyle='#7a6050';ctx.fillRect(x+1,y+5,7,3);
+  // Walls
+  ctx.fillStyle='#c8a878';ctx.fillRect(x+1,y+4,7,3);
+  // Wall shading
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+7,y+4,1,3);
+  // Roof
+  ctx.fillStyle='#882222';ctx.fillRect(x+0,y+2,8,3);
+  ctx.fillStyle='#aa2a2a';ctx.fillRect(x+1,y+1,6,2);
+  ctx.fillStyle='#cc3333';ctx.fillRect(x+2,y+0,4,2);
+  // Roof highlight
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(x+2,y,2,1);
+  // Door
+  ctx.fillStyle='#3a2010';ctx.fillRect(x+3,y+5,2,3);
+  ctx.fillStyle='rgba(255,200,100,0.3)';ctx.fillRect(x+3,y+5,1,1);
+  // Window
+  ctx.fillStyle='#88ccff';ctx.fillRect(x+1,y+4,2,2);
+  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fillRect(x+1,y+4,1,1);
+  // Team color strip on roof
+  if(owner&&TC[owner]){ctx.fillStyle=TC[owner];ctx.fillRect(x+1,y+1,6,1);}
+}
+
+function drawWall(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+1,y+7,7,1);
+  // Wall base
+  ctx.fillStyle='#666676';ctx.fillRect(x+0,y+3,8,5);
+  // Wall face highlight
+  ctx.fillStyle='#888899';ctx.fillRect(x+0,y+3,8,2);
+  // Wall top with crenels
+  ctx.fillStyle='#777788';ctx.fillRect(x+0,y+1,8,3);
+  // Crenels
+  ctx.fillStyle='#555566';ctx.fillRect(x+0,y+0,3,2);
+  ctx.fillStyle='#555566';ctx.fillRect(x+5,y+0,3,2);
+  // Mortar lines
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.fillRect(x+0,y+5,8,1);
+  // Side shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+7,y+1,1,7);
+}
+
+function drawGate(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+1,y+7,7,1);
+  // Gate body (stone)
+  ctx.fillStyle='#887755';ctx.fillRect(x+0,y+1,8,7);
+  // Stone highlight
+  ctx.fillStyle='#998866';ctx.fillRect(x+0,y+1,8,2);
+  // Gate arch opening
+  ctx.fillStyle='#1a1208';ctx.fillRect(x+2,y+3,4,5);
+  // Arch top (rounded pixel)
+  ctx.fillStyle='#1a1208';ctx.fillRect(x+1,y+2,6,2);
+  ctx.fillStyle='#887755';ctx.fillRect(x+1,y+2,1,1);
+  ctx.fillStyle='#887755';ctx.fillRect(x+6,y+2,1,1);
+  // Portcullis bars
+  ctx.fillStyle='rgba(80,60,20,0.7)';
+  ctx.fillRect(x+2,y+3,1,5);ctx.fillRect(x+4,y+3,1,5);
+  // Top crenels
+  ctx.fillStyle='#665544';ctx.fillRect(x+0,y+0,3,2);
+  ctx.fillStyle='#665544';ctx.fillRect(x+5,y+0,3,2);
+  // Golden keystone
+  ctx.fillStyle='#cc9900';ctx.fillRect(x+3,y+2,2,1);
 }
 
 // ── WEAPONS ───────────────────────────────────────────────────
@@ -627,22 +849,33 @@ function explode(cx,cy,R,lava){
 }
 
 // ── TOOL ──────────────────────────────────────────────────────
+// Tools that should be placed once at click center (not fill brush area)
+const SINGLE_PLACE=new Set(['house','wall','gate','tree','pine','ore','gold','crystal','cactus',
+  'vil_red','vil_blue','vil_green','vil_gold','bomb','meteor','lightning']);
+
 function applyTool(x,y,cx,cy){
   if(x<0||y<0||x>=W||y>=H) return;
   const cell=grid[y][x];
-  if(curTool==='bomb'){if(x===cx&&y===cy) explode(cx,cy,Math.round(brushSz*4),false);}
-  else if(curTool==='meteor'){if(x===cx&&y===cy) explode(cx,cy,Math.round(brushSz*6),true);}
-  else if(curTool==='lightning'){if(x===cx&&y===cy){cell.type='burned';bots=bots.filter(b=>!(b.x===cx&&b.y===cy));}}
-  else if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
-  else if(curTool==='flood'){cell.type='water';}
-  else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===x&&b.y===y));}
-  else if(curTool.startsWith('vil_')){
-    if(x===cx&&y===cy){
+  // Single-place tools: only act at exact click center
+  if(SINGLE_PLACE.has(curTool)){
+    if(x!==cx||y!==cy) return;
+    if(curTool==='bomb') explode(cx,cy,Math.round(brushSz*4),false);
+    else if(curTool==='meteor') explode(cx,cy,Math.round(brushSz*6),true);
+    else if(curTool==='lightning'){cell.type='burned';bots=bots.filter(b=>!(b.x===cx&&b.y===cy));}
+    else if(curTool.startsWith('vil_')){
       if(!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
       placeCastle(cx,cy,curTool.replace('vil_',''));
+    } else {
+      // Snap to 8px grid for sprites
+      const sx=Math.floor(cx/8)*8,sy=Math.floor(cy/8)*8;
+      if(sx>=0&&sy>=0&&sx<W&&sy<H) grid[sy][sx].type=curTool;
     }
+    return;
   }
-  else if(['wall','gate','house'].includes(curTool)){cell.type=curTool;}
+  // Brush tools: fill area
+  if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
+  else if(curTool==='flood'){cell.type='water';}
+  else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===x&&b.y===y));}
   else{cell.type=curTool;}
 }
 
