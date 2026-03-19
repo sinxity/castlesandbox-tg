@@ -83,7 +83,7 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
         ⚔️<b id="res-knights">0</b>/10 🌙<b id="day-time">День</b>
       </div>
     </div>
-    <div id="zoom-indicator">100%</div>
+
     <div id="elog"></div>
     <div id="hint"></div>
   </div>
@@ -259,13 +259,7 @@ function applyTransform(){
   canvas.style.transform=`translate(${-camX}px,${-camY}px) scale(${camZ})`;
 }
 
-function showZoomIndicator(){
-  const zi=document.getElementById('zoom-indicator');
-  zi.textContent=Math.round(camZ*100)+'%';
-  zi.style.opacity='1';
-  clearTimeout(zoomTimer);
-  zoomTimer=setTimeout(()=>zi.style.opacity='0',1000);
-}
+function showZoomIndicator(){}
 
 // Screen → canvas coords (accounts for wrap offset + zoom + pan)
 function screenToCanvas(sx,sy){
@@ -722,7 +716,7 @@ function render(){
     if(t==='fire'){
       const f=(tick+x+y)%4;
       ctx.fillStyle=f<2?'#ff6600':f===2?'#ff9900':'#ffcc00';
-      if(Math.random()<0.02) spawnFireParticle(x,y);
+      if(Math.random()<0.008) spawnFireParticle(x,y);
     } else if(t==='lava'){
       const lv=(tick*2+x+y)%6;
       ctx.fillStyle=lv<3?'#cc3300':'#ff5500';
@@ -817,13 +811,13 @@ function updateDayNight(){
   if(tick%6===0){
     for(let y=0;y<H;y+=8) for(let x=0;x<W;x+=8){
       const cell=grid[y]&&grid[y][x];
-      if(cell&&cell.type==='house'&&Math.random()<0.08){
+      if(cell&&cell.type==='house'&&Math.random()<0.03){
         particles.push({x:x+3,y:y-1,vx:(Math.random()-0.5)*0.3,vy:-0.4-Math.random()*0.3,
           r:180,g:180,b:185,age:0,maxAge:25+Math.floor(Math.random()*15),size:1.5});
       }
     }
     castles.forEach(c=>{
-      if(Math.random()<0.3){
+      if(Math.random()<0.1){
         const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H);
         particles.push({x:cx+Math.random()*6-3,y:cy-12,vx:(Math.random()-0.5)*0.4,vy:-0.6,
           r:150,g:150,b:155,age:0,maxAge:30,size:2});
@@ -990,12 +984,13 @@ function drawHouse(x,y,owner){
 }
 
 function hasWallAt(x,y){
-  const cell=grid[y]&&grid[y][x];
+  const sx=Math.floor(x/10)*10,sy=Math.floor(y/10)*10;
+  const cell=grid[sy]&&grid[sy][sx];
   return cell&&(cell.type==='wall'||cell.type==='gate');
 }
 
 function drawWall(x,y){
-  const S=8; // sprite step
+  const S=10; // sprite step
   const N=hasWallAt(x,y-S),S2=hasWallAt(x,y+S);
   const E=hasWallAt(x+S,y),W2=hasWallAt(x-S,y);
   const isHoriz=E||W2;
@@ -1076,7 +1071,7 @@ function explode(cx,cy,R,lava){
 
 // ── TOOL ──────────────────────────────────────────────────────
 // Tools that should be placed once at click center (not fill brush area)
-const SINGLE_PLACE=new Set(['house','wall','gate','tree','pine','ore','gold','crystal','cactus',
+const SINGLE_PLACE=new Set(['house','gate','tree','pine','ore','gold','crystal','cactus',
   'vil_red','vil_blue','vil_green','vil_gold','bomb','meteor','lightning']);
 
 function applyTool(x,y,cx,cy){
@@ -1091,9 +1086,13 @@ function applyTool(x,y,cx,cy){
     else if(curTool.startsWith('vil_')){
       if(!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
       placeCastle(cx,cy,curTool.replace('vil_',''));
+    } else if(curTool==='house'){
+      // House: snap to 10px grid
+      const sx=Math.floor(cx/10)*10,sy=Math.floor(cy/10)*10;
+      if(sx>=0&&sy>=0&&sx<W&&sy<H){grid[sy][sx].type='house';if(grid[sy][sx]) grid[sy][sx].owner=null;}
     } else {
-      // Snap to 8px grid for sprites
-      const sx=Math.floor(cx/8)*8,sy=Math.floor(cy/8)*8;
+      // Other sprites: snap to 10px grid
+      const sx=Math.floor(cx/10)*10,sy=Math.floor(cy/10)*10;
       if(sx>=0&&sy>=0&&sx<W&&sy<H) grid[sy][sx].type=curTool;
     }
     return;
@@ -1102,6 +1101,11 @@ function applyTool(x,y,cx,cy){
   if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
   else if(curTool==='flood'){cell.type='water';}
   else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===x&&b.y===y));}
+  else if(curTool==='wall'){
+    // Walls snap to 10px grid for clean lines
+    const sx=Math.floor(x/10)*10,sy=Math.floor(y/10)*10;
+    if(sx>=0&&sy>=0&&sx<W&&sy<H) grid[sy][sx].type='wall';
+  }
   else{cell.type=curTool;}
 }
 
