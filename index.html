@@ -94,12 +94,12 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
       <div class="tab" onclick="swTab(2)">Оружие</div>
       <div class="tab" onclick="swTab(3)">Поселение</div>
     </div>
-    <div class="tbx" id="tbx"></div>
     <div id="brush-row">
       <span class="brl">Кисть</span>
       <input type="range" id="bsl" min="1" max="15" value="4" step="1">
       <span id="bval">4</span>
     </div>
+    <div class="tbx" id="tbx"></div>
   </div>
 </div>
 
@@ -378,11 +378,17 @@ function rebuildTerritories(){
     const col=TCRGB[c.team]||'128,128,128';
     const cellSet=new Set();
     for(let i=0;i<c.cells.length;i+=2) cellSet.add(c.cells[i+1]*W+c.cells[i]);
+    // Draw filled territory
+    terrCtx.fillStyle=`rgba(${col},0.15)`;
+    for(let i=0;i<c.cells.length;i+=2){
+      terrCtx.fillRect(c.cells[i],c.cells[i+1],2,2);
+    }
+    // Draw border on top
+    terrCtx.fillStyle=`rgba(${col},0.9)`;
     for(let i=0;i<c.cells.length;i+=2){
       const x=c.cells[i],y=c.cells[i+1];
       const border=!cellSet.has(y*W+(x-1))||!cellSet.has(y*W+(x+1))||!cellSet.has((y-1)*W+x)||!cellSet.has((y+1)*W+x);
-      terrCtx.fillStyle=border?`rgba(${col},0.85)`:`rgba(${col},0.18)`;
-      terrCtx.fillRect(x,y,1,1);
+      if(border) terrCtx.fillRect(x,y,2,2);
     }
   });
 }
@@ -451,13 +457,7 @@ function drawBot(b){
     // Worker: small colored dot
     ctx.fillStyle=tc;ctx.fillRect(b.x-1,b.y-1,3,3);
   }
-  // Icon above (only every Nth frame for perf)
-  if(tick%4===0){
-    ctx.font='5px serif';
-    ctx.textAlign='center';
-    ctx.fillText(b.isKnight?'⚔':'⛏',b.x+1,b.y-3);
-    ctx.textAlign='left';
-  }
+
 }
 
 // Color lookup for painted grid cells
