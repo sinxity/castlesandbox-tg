@@ -237,11 +237,13 @@ let rafId=null;
 
 // ── VIEWPORT / ZOOM ───────────────────────────────────────────
 let camX=0,camY=0,camZ=1;
-const MIN_Z=0.3,MAX_Z=5;
-let pinchStartDist=0,pinchStartZ=1;
+let targetZ=1; // smooth zoom target
+const MIN_Z=0.25,MAX_Z=6;
+let pinchStartDist=0,pinchStartZ=1,lastPinchDist=0;
 let panStartX=0,panStartY=0,panStartCamX=0,panStartCamY=0;
 let isPinching=false,isPanMode=false;
 let zoomTimer=null;
+let panVelX=0,panVelY=0,lastPanX=0,lastPanY=0; // pan momentum
 
 function clampCam(){
   if(!canvas) return;
@@ -278,8 +280,9 @@ function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
   // Screen size = canvas size, no DPR scaling (fixes stretch bug)
-  W=wrap.clientWidth;
-  H=wrap.clientHeight;
+  // Map is 2.5x screen size for more world to explore
+  W=Math.floor(wrap.clientWidth*2.5);
+  H=Math.floor(wrap.clientHeight*2.5);
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
@@ -650,20 +653,26 @@ function getTerrainColor(t,x,y){
 function render(){
   // Draw terrain from grid
   ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);
-  for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){
+  const PS=3; // pixel size - 3x3 for crisp pixelart look
+  for(let y=0;y<H;y+=PS) for(let x=0;x<W;x+=PS){
     const cell=grid[y]&&grid[y][x];
     if(!cell) continue;
     const t=cell.type;
     if(t==='fire'){
       const f=(tick+x+y)%4;
       ctx.fillStyle=f<2?'#ff6600':f===2?'#ff9900':'#ffcc00';
-      if(Math.random()<0.03) spawnFireParticle(x,y);
+      if(Math.random()<0.02) spawnFireParticle(x,y);
+    } else if(t==='lava'){
+      const lv=(tick*2+x+y)%6;
+      ctx.fillStyle=lv<3?'#cc3300':'#ff5500';
     } else {
       const col=getTerrainColor(t,x,y);
       if(!col) continue;
-      ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+      // Add subtle variation per pixel
+      const v=hash(x+y*7,y+x*3)&0xf;
+      ctx.fillStyle=`rgb(${Math.min(255,col[0]+v-8)},${Math.min(255,col[1]+v-8)},${Math.min(255,col[2]+v-8)})`;
     }
-    ctx.fillRect(x,y,2,2);
+    ctx.fillRect(x,y,PS,PS);
   }
   // Draw sprites (trees, ores, buildings) on top
   drawSprites();
@@ -741,7 +750,7 @@ function updateDayNight(){
 // Sprites drawn at fixed 8x8 px regardless of brush size
 // Only drawn every 8px to avoid crowding
 function drawSprites(){
-  const STEP=8;
+  const STEP=10;
   for(let y=0;y<H;y+=STEP) for(let x=0;x<W;x+=STEP){
     const cell=grid[y]&&grid[y][x];if(!cell) continue;
     drawSprite(cell.type,x,y,cell.owner);
@@ -1365,6 +1374,11 @@ function loop(ts){
   rafId=requestAnimationFrame(loop);
   if(ts-lastT<60) return;
   lastT=ts;tick++;
+  // Smooth zoom lerp
+  if(Math.abs(camZ-targetZ)>0.001){
+    camZ+=(targetZ-camZ)*0.15;
+    clampCam();
+  }
   if(tick%2===0) updateBots();
   if(tick%3===0) updateFire();
   if(tick%4===0) updateArmies();
@@ -1393,6 +1407,7 @@ wrap.addEventListener('touchstart',e=>{
   if(e.touches.length===2){
     isPinching=true;isDrawing=false;
     pinchStartDist=getTouchDist(e.touches);
+    lastPinchDist=pinchStartDist;
     pinchStartZ=camZ;
     const mid=getTouchMid(e.touches);
     panStartX=mid.x;panStartY=mid.y;
@@ -1414,18 +1429,31 @@ wrap.addEventListener('touchmove',e=>{
   if(e.touches.length===2&&isPinching){
     const dist=getTouchDist(e.touches);
     const mid=getTouchMid(e.touches);
-    const newZ=Math.max(MIN_Z,Math.min(MAX_Z,pinchStartZ*(dist/pinchStartDist)));
-    // Zoom around midpoint
-    const scale=newZ/pinchStartZ;
-    camX=panStartCamX-(mid.x-panStartX)+mid.x*(1-scale)*pinchStartZ;
-    camY=panStartCamY-(mid.y-panStartY)+mid.y*(1-scale)*pinchStartZ;
-    camZ=newZ;
+    if(lastPinchDist>0){
+      // Incremental zoom - much smoother than ratio-based
+      const delta=dist/lastPinchDist;
+      const newZ=Math.max(MIN_Z,Math.min(MAX_Z,camZ*delta));
+      const rect=wrap.getBoundingClientRect();
+      const mx=mid.x-rect.left, my=mid.y-rect.top;
+      camX=mx+(camX-mx)*newZ/camZ;
+      camY=my+(camY-my)*newZ/camZ;
+      camZ=newZ;targetZ=newZ;
+    }
+    lastPinchDist=dist;
+    // Pan while pinching
+    const dx=mid.x-panStartX, dy=mid.y-panStartY;
+    camX=panStartCamX-dx; camY=panStartCamY-dy;
+    panStartX=mid.x; panStartY=mid.y;
+    panStartCamX=camX; panStartCamY=camY;
     clampCam();showZoomIndicator();
   } else if(e.touches.length===1){
     const t=e.touches[0];
     if(isPanMode){
-      camX=panStartCamX-(t.clientX-panStartX);
-      camY=panStartCamY-(t.clientY-panStartY);
+      panVelX=panStartX-t.clientX;
+      panVelY=panStartY-t.clientY;
+      camX=panStartCamX+(t.clientX-panStartX)*-1;
+      camY=panStartCamY+(t.clientY-panStartY)*-1;
+      lastPanX=t.clientX;lastPanY=t.clientY;
       clampCam();
     } else if(isDrawing){
       paintAt(t.clientX,t.clientY);
@@ -1435,7 +1463,7 @@ wrap.addEventListener('touchmove',e=>{
 
 wrap.addEventListener('touchend',e=>{
   e.preventDefault();
-  if(e.touches.length<2) isPinching=false;
+  if(e.touches.length<2){isPinching=false;lastPinchDist=0;}
   if(e.touches.length===0) isDrawing=false;
 },{passive:false});
 
