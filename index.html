@@ -75,6 +75,7 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
       <div id="map-btns">
         <button class="tbtn" onclick="resetWorld()">🌍 Новый</button>
         <button class="tbtn" onclick="loadEurope()">🗺 Европа</button>
+        <button class="tbtn" id="pan-btn" title="Режим перемещения">🖐</button>
       </div>
       <div id="stats">
         Боты: <b id="sb">0</b><br>
@@ -213,10 +214,10 @@ let rafId=null;
 
 // ── VIEWPORT / ZOOM ───────────────────────────────────────────
 let camX=0,camY=0,camZ=1;
-const MIN_Z=0.4,MAX_Z=4;
-let pinchStartDist=0,pinchStartZ=1,pinchStartMid={x:0,y:0};
+const MIN_Z=0.3,MAX_Z=5;
+let pinchStartDist=0,pinchStartZ=1;
 let panStartX=0,panStartY=0,panStartCamX=0,panStartCamY=0;
-let isPinching=false,isPanning=false;
+let isPinching=false,isPanMode=false;
 let zoomTimer=null;
 
 function clampCam(){
@@ -229,9 +230,8 @@ function clampCam(){
 }
 
 function applyTransform(){
+  canvas.style.transformOrigin='0 0';
   canvas.style.transform=`translate(${-camX}px,${-camY}px) scale(${camZ})`;
-  canvas.style.width=W+'px';
-  canvas.style.height=H+'px';
 }
 
 function showZoomIndicator(){
@@ -242,26 +242,31 @@ function showZoomIndicator(){
   zoomTimer=setTimeout(()=>zi.style.opacity='0',1000);
 }
 
-// Screen → canvas coords
+// Screen → canvas coords (accounts for wrap offset + zoom + pan)
 function screenToCanvas(sx,sy){
-  return{x:(sx+camX)/camZ, y:(sy+camY)/camZ};
+  const rect=wrap.getBoundingClientRect();
+  const rx=sx-rect.left;
+  const ry=sy-rect.top;
+  return{x:(rx+camX)/camZ, y:(ry+camY)/camZ};
 }
 
 // ── INIT ──────────────────────────────────────────────────────
 function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
-  // Use devicePixelRatio for crisp rendering
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  W=Math.floor(wrap.clientWidth*dpr);
-  H=Math.floor(wrap.clientHeight*dpr);
+  // Screen size = canvas size, no DPR scaling (fixes stretch bug)
+  W=wrap.clientWidth;
+  H=wrap.clientHeight;
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
+  canvas.style.transformOrigin='0 0';
+  canvas.style.transform='none';
   ctx=canvas.getContext('2d');
   terrCanvas=document.createElement('canvas');
   terrCanvas.width=W;terrCanvas.height=H;
   terrCtx=terrCanvas.getContext('2d');
   camX=0;camY=0;camZ=1;
+  isPanMode=false;
   grid=[];
   for(let y=0;y<H;y++){grid[y]=[];for(let x=0;x<W;x++) grid[y][x]={type:'water',fa:0};}
   bots=[];castles=[];armies=[];tick=0;evts=[];
@@ -462,7 +467,7 @@ function applyTool(x,y,cx,cy){
 
 function paintAt(sx,sy){
   const{x:cx,y:cy}=screenToCanvas(sx,sy);
-  const r=Math.max(1,Math.round(brushSz/camZ));
+  const r=Math.max(1,brushSz);
   for(let dy=0-r;dy<=r;dy++) for(let dx=0-r;dx<=r;dx++){
     if(dx*dx+dy*dy>r*r) continue;
     applyTool(Math.round(cx+dx),Math.round(cy+dy),Math.round(cx),Math.round(cy));
@@ -598,22 +603,33 @@ function loop(ts){
 function getTouchDist(t){return Math.hypot(t[1].clientX-t[0].clientX,t[1].clientY-t[0].clientY);}
 function getTouchMid(t){return{x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2};}
 function setupEvents(){
+  // Pan mode button
+  const panBtn=document.getElementById('pan-btn');
+  panBtn.addEventListener('click',()=>{
+    isPanMode=!isPanMode;
+    panBtn.style.background=isPanMode?'rgba(55,138,221,0.5)':'rgba(10,20,35,0.82)';
+    panBtn.textContent=isPanMode?'✋':'🖐';
+  });
+
 
 wrap.addEventListener('touchstart',e=>{
   e.preventDefault();
   if(e.touches.length===2){
-    isPinching=true;isDrawing=false;isPanning=false;
+    isPinching=true;isDrawing=false;
     pinchStartDist=getTouchDist(e.touches);
     pinchStartZ=camZ;
     const mid=getTouchMid(e.touches);
-    pinchStartMid=mid;
     panStartX=mid.x;panStartY=mid.y;
     panStartCamX=camX;panStartCamY=camY;
   } else if(e.touches.length===1&&!isPinching){
     const t=e.touches[0];
-    drawStart={x:t.clientX,y:t.clientY};
-    isDrawing=true;isPanning=false;
-    paintAt(t.clientX,t.clientY);
+    if(isPanMode){
+      panStartX=t.clientX;panStartY=t.clientY;
+      panStartCamX=camX;panStartCamY=camY;
+    } else {
+      isDrawing=true;
+      paintAt(t.clientX,t.clientY);
+    }
   }
 },{passive:false});
 
@@ -622,32 +638,41 @@ wrap.addEventListener('touchmove',e=>{
   if(e.touches.length===2&&isPinching){
     const dist=getTouchDist(e.touches);
     const mid=getTouchMid(e.touches);
-    // Zoom
     const newZ=Math.max(MIN_Z,Math.min(MAX_Z,pinchStartZ*(dist/pinchStartDist)));
-    // Pan simultaneously
-    const dx=mid.x-panStartX,dy=mid.y-panStartY;
-    // Zoom around pinch midpoint
-    const zRatio=newZ/camZ;
-    camX=mid.x*newZ-(mid.x*pinchStartZ-(panStartCamX));
-    camY=mid.y*newZ-(mid.y*pinchStartZ-(panStartCamY));
+    // Zoom around midpoint
+    const scale=newZ/pinchStartZ;
+    camX=panStartCamX-(mid.x-panStartX)+mid.x*(1-scale)*pinchStartZ;
+    camY=panStartCamY-(mid.y-panStartY)+mid.y*(1-scale)*pinchStartZ;
     camZ=newZ;
-    clampCam();
-    showZoomIndicator();
-  } else if(e.touches.length===1&&isDrawing){
+    clampCam();showZoomIndicator();
+  } else if(e.touches.length===1){
     const t=e.touches[0];
-    paintAt(t.clientX,t.clientY);
+    if(isPanMode){
+      camX=panStartCamX-(t.clientX-panStartX);
+      camY=panStartCamY-(t.clientY-panStartY);
+      clampCam();
+    } else if(isDrawing){
+      paintAt(t.clientX,t.clientY);
+    }
   }
 },{passive:false});
 
 wrap.addEventListener('touchend',e=>{
   e.preventDefault();
   if(e.touches.length<2) isPinching=false;
-  if(e.touches.length===0){isDrawing=false;isPanning=false;}
+  if(e.touches.length===0) isDrawing=false;
 },{passive:false});
 
 // Mouse support (desktop testing)
-wrap.addEventListener('mousedown',e=>{isDrawing=true;paintAt(e.clientX,e.clientY);});
-wrap.addEventListener('mousemove',e=>{if(isDrawing) paintAt(e.clientX,e.clientY);});
+wrap.addEventListener('mousedown',e=>{
+  if(isPanMode){panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;isDrawing=true;}
+  else{isDrawing=true;paintAt(e.clientX,e.clientY);}
+});
+wrap.addEventListener('mousemove',e=>{
+  if(!isDrawing) return;
+  if(isPanMode){camX=panStartCamX-(e.clientX-panStartX);camY=panStartCamY-(e.clientY-panStartY);clampCam();}
+  else paintAt(e.clientX,e.clientY);
+});
 wrap.addEventListener('mouseup',()=>isDrawing=false);
 wrap.addEventListener('mouseleave',()=>isDrawing=false);
 wrap.addEventListener('wheel',e=>{
@@ -656,8 +681,8 @@ wrap.addEventListener('wheel',e=>{
   const newZ=Math.max(MIN_Z,Math.min(MAX_Z,camZ*delta));
   const rect=wrap.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
-  camX=mx-(mx-camX)*newZ/camZ;
-  camY=my-(my-camY)*newZ/camZ;
+  camX=mx+( camX-mx)*newZ/camZ;
+  camY=my+(camY-my)*newZ/camZ;
   camZ=newZ;clampCam();showZoomIndicator();
 },{passive:false});
 } // end setupEvents
