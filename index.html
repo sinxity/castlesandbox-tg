@@ -222,12 +222,17 @@ const RES={red:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0},
            gold:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0}};
 // Active raids: {team, knights[], tx, ty, targetTeam, phase, loot, rebuildTimer}
 let raids=[];
+let fireCells=new Set(); // track active fire cells for fast iteration
 // Defeated castles waiting to rebuild: {castle, timer}
 let defeated=[];
 // Loot animations: {x,y,team,age}
 let lootAnims=[];
 // Particles: {x,y,vx,vy,r,g,b,age,maxAge,size}
 let particles=[];
+// Render optimization
+let terrainDirty=true; // redraw terrain only when changed
+let terrainCache=null; // offscreen canvas for terrain+sprites
+let spriteDirty=true;
 // Day/night cycle
 let dayTime=0; // 0=noon, 0.5=midnight, cycles 0..1
 let daySpeed=0.0002; // full cycle ~83 seconds
@@ -274,9 +279,9 @@ function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
   // Screen size = canvas size, no DPR scaling (fixes stretch bug)
-  // Map is 2.5x screen size for more world to explore
-  W=Math.floor(wrap.clientWidth*2.5);
-  H=Math.floor(wrap.clientHeight*2.5);
+  // Map is 2x screen size - balance between world size and performance
+  W=Math.floor(wrap.clientWidth*2);
+  H=Math.floor(wrap.clientHeight*2);
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
@@ -289,7 +294,7 @@ function initBase(){
   isPanMode=false;
   grid=[];
   for(let y=0;y<H;y++){grid[y]=[];for(let x=0;x<W;x++) grid[y][x]={type:'water',fa:0};}
-  bots=[];castles=[];armies=[];raids=[];defeated=[];lootAnims=[];particles=[];tick=0;evts=[];dayTime=0;
+  bots=[];castles=[];armies=[];raids=[];defeated=[];lootAnims=[];particles=[];fireCells=new Set();tick=0;evts=[];dayTime=0;terrainDirty=true;spriteDirty=true;terrainCache=null;
 }
 
 function isLand(x,y){
@@ -381,6 +386,7 @@ function initGridFromMap(){
       else grid[y][x].type='grass';
     }
   }
+  terrainDirty=true;spriteDirty=true;
   // Add rivers as water in grid
   RIVERS.forEach(rv=>{
     for(let i=0;i<rv.length-1;i++){
@@ -465,6 +471,7 @@ function spawnFireParticle(cx,cy){
 }
 
 function updateParticles(){
+  if(particles.length>200) particles.splice(0,particles.length-200);
   particles=particles.filter(p=>{
     p.age++;
     p.x+=p.vx;p.y+=p.vy;
@@ -705,41 +712,76 @@ function renderOverview(){
   });
 }
 
-function render(){
-  // Draw terrain from grid
-  ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);
-  const PS=3; // pixel size - 3x3 for crisp pixelart look
+function buildTerrainCache(){
+  if(!terrainCache){
+    terrainCache=document.createElement('canvas');
+    terrainCache.width=W;terrainCache.height=H;
+  }
+  const tc=terrainCache.getContext('2d');
+  // Draw terrain via ImageData - fast pixel buffer write
+  const PS=3;
+  const img=tc.createImageData(W,H);
+  const d=img.data;
+  // Fill background (ocean)
+  for(let i=0;i<d.length;i+=4){d[i]=13;d[i+1]=31;d[i+2]=53;d[i+3]=255;}
   for(let y=0;y<H;y+=PS) for(let x=0;x<W;x+=PS){
     const cell=grid[y]&&grid[y][x];
     if(!cell) continue;
     const t=cell.type;
+    if(t==='fire'||t==='lava') continue; // animated, drawn each frame
+    const col=getTerrainColor(t,x,y);
+    if(!col) continue;
+    const v=(hash(x+y*7,y+x*3)&0xf)-8;
+    const r=Math.max(0,Math.min(255,col[0]+v));
+    const g=Math.max(0,Math.min(255,col[1]+v));
+    const b=Math.max(0,Math.min(255,col[2]+v));
+    for(let py=0;py<PS&&y+py<H;py++) for(let px=0;px<PS&&x+px<W;px++){
+      const idx=((y+py)*W+(x+px))*4;
+      d[idx]=r;d[idx+1]=g;d[idx+2]=b;d[idx+3]=255;
+    }
+  }
+  tc.putImageData(img,0,0);
+  // Draw sprites on top using sprite-specific context
+  drawSpritesOnCtx(tc);
+  terrainDirty=false;
+}
+
+// Draw sprites on any given context
+function drawSpritesOnCtx(targetCtx){
+  const origCtx=ctx;
+  ctx=targetCtx;
+  drawSprites();
+  ctx=origCtx;
+}
+
+function render(){
+  // Rebuild terrain cache only when dirty
+  if(terrainDirty||!terrainCache) buildTerrainCache();
+  ctx.drawImage(terrainCache,0,0);
+
+  // Animate fire/lava on top (always dynamic)
+  const PS=3;
+  for(let y=0;y<H;y+=PS) for(let x=0;x<W;x+=PS){
+    const cell=grid[y]&&grid[y][x];if(!cell) continue;
+    const t=cell.type;
     if(t==='fire'){
       const f=(tick+x+y)%4;
       ctx.fillStyle=f<2?'#ff6600':f===2?'#ff9900':'#ffcc00';
-      if(Math.random()<0.008) spawnFireParticle(x,y);
+      ctx.fillRect(x,y,PS,PS);
+      if(Math.random()<0.005) spawnFireParticle(x,y);
     } else if(t==='lava'){
-      const lv=(tick*2+x+y)%6;
-      ctx.fillStyle=lv<3?'#cc3300':'#ff5500';
-    } else {
-      const col=getTerrainColor(t,x,y);
-      if(!col) continue;
-      // Add subtle variation per pixel
-      const v=hash(x+y*7,y+x*3)&0xf;
-      ctx.fillStyle=`rgb(${Math.min(255,col[0]+v-8)},${Math.min(255,col[1]+v-8)},${Math.min(255,col[2]+v-8)})`;
+      ctx.fillStyle=(tick*2+x+y)%6<3?'#cc3300':'#ff5500';
+      ctx.fillRect(x,y,PS,PS);
     }
-    ctx.fillRect(x,y,PS,PS);
   }
-  // Draw sprites (trees, ores, buildings) on top
-  drawSprites();
-  // Territory overlay
+
+  // Territory + entities
   ctx.drawImage(terrCanvas,0,0);
   castles.forEach(drawCastle);
   armies.forEach(drawArmy);
   bots.forEach(drawBot);
   updateParticles();
-  // Day/night overlay
   updateDayNight();
-  // Low-zoom: draw pixelated territory overview
   if(camZ<0.5) drawZoomedOutBorders();
 }
 
@@ -787,23 +829,20 @@ function updateDayNight(){
     ctx.fillRect(0,0,W,H);
   }
 
-  // Castle lights at night
-  if(alpha>0.2){
+  // Castle lights at night - simple circles, no gradient
+  if(alpha>0.25){
+    const a1=(alpha*0.5).toFixed(2);
+    const a2=(alpha*0.25).toFixed(2);
     castles.forEach(c=>{
       const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H);
-      const grd=ctx.createRadialGradient(cx,cy,2,cx,cy,25);
-      grd.addColorStop(0,`rgba(255,200,80,${(alpha*0.6).toFixed(2)})`);
-      grd.addColorStop(1,'rgba(255,150,30,0)');
-      ctx.fillStyle=grd;
-      ctx.fillRect(cx-25,cy-25,50,50);
+      ctx.fillStyle=`rgba(255,200,80,${a1})`;
+      ctx.beginPath();ctx.arc(cx,cy,20,0,Math.PI*2);ctx.fill();
     });
-    // House lights
-    for(let y=0;y<H;y+=8) for(let x=0;x<W;x+=8){
+    // House lights - only check every 10px
+    ctx.fillStyle=`rgba(255,200,80,${a2})`;
+    for(let y=0;y<H;y+=10) for(let x=0;x<W;x+=10){
       const cell=grid[y]&&grid[y][x];
-      if(cell&&cell.type==='house'){
-        ctx.fillStyle=`rgba(255,200,80,${(alpha*0.4).toFixed(2)})`;
-        ctx.fillRect(x-3,y-3,14,14);
-      }
+      if(cell&&cell.type==='house') ctx.fillRect(x-2,y-2,14,14);
     }
   }
 
@@ -1057,7 +1096,7 @@ function explode(cx,cy,R,lava){
     if(dx*dx+dy*dy>R*R) continue;
     const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=W||ny>=H) continue;
     const dist=Math.sqrt(dx*dx+dy*dy);
-    if(lava&&dist<R*0.35) grid[ny][nx].type='lava';
+    if(lava&&dist<R*0.35){grid[ny][nx].type='lava';}
     else{const r=Math.random();grid[ny][nx].type=r<0.4?'burned':r<0.7?'sand':'rock';}
   }
   bots=bots.filter(b=>Math.hypot(b.x-cx,b.y-cy)>R*0.8);
@@ -1081,17 +1120,15 @@ const ONESHOT_TOOLS=new Set(['bomb','meteor','lightning','vil_red','vil_blue','v
 let lastSpriteCell={x:-99,y:-99}; // prevent double-placing on same cell
 
 function placeSprite(cx,cy){
-  // Snap to 10px grid
   const sx=Math.floor(cx/10)*10;
   const sy=Math.floor(cy/10)*10;
   if(sx<0||sy<0||sx>=W||sy>=H) return;
-  // Don't place on same cell twice in one stroke
   if(sx===lastSpriteCell.x&&sy===lastSpriteCell.y) return;
   lastSpriteCell={x:sx,y:sy};
   const cell=grid[sy][sx];
   if(!cell) return;
-  cell.type=curTool;
-  cell.owner=null;
+  cell.type=curTool;cell.owner=null;
+  terrainDirty=true;spriteDirty=true;
 }
 
 function applyTool(cx,cy,isFirst){
@@ -1131,11 +1168,12 @@ function applyTool(cx,cy,isFirst){
     if(nx<0||ny<0||nx>=W||ny>=H) continue;
     const cell=grid[ny][nx];
     if(!cell) continue;
-    if(curTool==='fire'){if(FLAMMABLE.has(cell.type)) cell.type='fire';}
+    if(curTool==='fire'){if(FLAMMABLE.has(cell.type)){cell.type='fire';fireCells.add(cy*W+cx);}}
     else if(curTool==='flood'){cell.type='water';}
     else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===nx&&b.y===ny));}
     else cell.type=curTool;
   }
+  terrainDirty=true;
 }
 
 function paintAt(sx,sy,isFirst){
@@ -1321,7 +1359,7 @@ function updateBots(){
   bots.forEach((b,i)=>{
     if(dead.has(i)) return;
     b.timer=(b.timer||0)+1;
-    const spd=b.isKnight?6:12;
+    const spd=b.isKnight?8:15;
     if(b.timer%spd!==0) return;
     if(!isLand(b.x,b.y)){dead.add(i);return;}
 
@@ -1482,16 +1520,27 @@ function updateRaids(){
 }
 
 function updateFire(){
-  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
-    const c=grid[y][x];if(c.type!=='fire') continue;
+  if(fireCells.size===0) return;
+  const toRemove=[];
+  for(const key of fireCells){
+    const x=key%W, y=Math.floor(key/W);
+    if(y<0||y>=H||x<0||x>=W){toRemove.push(key);continue;}
+    const c=grid[y][x];
+    if(c.type!=='fire'){toRemove.push(key);continue;}
     c.fa=(c.fa||0)+1;
-    if(c.fa>40+Math.floor(Math.random()*40)){c.type='burned';c.fa=0;continue;}
-    if(Math.random()<Math.max(0,0.05-c.fa*0.001)){
+    terrainDirty=true;
+    if(c.fa>40+Math.floor(Math.random()*40)){
+      c.type='burned';c.fa=0;toRemove.push(key);continue;
+    }
+    if(Math.random()<Math.max(0,0.04-c.fa*0.001)){
       const d=D4[Math.floor(Math.random()*4)];
       const nx2=x+d[0],ny2=y+d[1];
-      if(nx2>=0&&ny2>=0&&nx2<W&&ny2<H&&FLAMMABLE.has(grid[ny2][nx2].type)){grid[ny2][nx2].type='fire';grid[ny2][nx2].fa=0;}
+      if(nx2>=0&&ny2>=0&&nx2<W&&ny2<H&&FLAMMABLE.has(grid[ny2][nx2].type)){
+        grid[ny2][nx2].type='fire';grid[ny2][nx2].fa=0;fireCells.add(ny2*W+nx2);
+      }
     }
   }
+  toRemove.forEach(k=>fireCells.delete(k));
 }
 
 function logEvent(msg){evts.unshift(msg);if(evts.length>5) evts.pop();document.getElementById('elog').innerHTML=evts.join('<br>');}
