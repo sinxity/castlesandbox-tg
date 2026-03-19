@@ -219,6 +219,8 @@ let raids=[];
 let defeated=[];
 // Loot animations: {x,y,team,age}
 let lootAnims=[];
+// Particles: {x,y,vx,vy,r,g,b,age,maxAge,size}
+let particles=[];
 let curTab=0,curTool='water',brushSz=4;
 let isDrawing=false,drawStart=null;
 let rafId=null;
@@ -280,7 +282,7 @@ function initBase(){
   isPanMode=false;
   grid=[];
   for(let y=0;y<H;y++){grid[y]=[];for(let x=0;x<W;x++) grid[y][x]={type:'water',fa:0};}
-  bots=[];castles=[];armies=[];raids=[];defeated=[];lootAnims=[];tick=0;evts=[];
+  bots=[];castles=[];armies=[];raids=[];defeated=[];lootAnims=[];particles=[];tick=0;evts=[];
 }
 
 function isLand(x,y){
@@ -400,40 +402,142 @@ function rebuildTerritories(){
 }
 
 // ── DRAW ──────────────────────────────────────────────────────
+function spawnExplosion(cx,cy,count,r,g,b){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const speed=1+Math.random()*4;
+    particles.push({x:cx,y:cy,
+      vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
+      r,g,b,age:0,maxAge:20+Math.floor(Math.random()*20),
+      size:1+Math.random()*2});
+  }
+}
+
+function spawnFireParticle(cx,cy){
+  const colors=[[255,140,0],[255,80,0],[255,220,0],[200,50,0]];
+  const c=colors[Math.floor(Math.random()*colors.length)];
+  particles.push({x:cx+Math.random()*4-2,y:cy,
+    vx:(Math.random()-0.5)*0.8,vy:-0.5-Math.random()*1.5,
+    r:c[0],g:c[1],b:c[2],age:0,maxAge:12+Math.floor(Math.random()*8),
+    size:1+Math.random()});
+}
+
+function updateParticles(){
+  particles=particles.filter(p=>{
+    p.age++;
+    p.x+=p.vx;p.y+=p.vy;
+    p.vy+=0.08; // gravity
+    const alpha=Math.max(0,1-p.age/p.maxAge);
+    ctx.fillStyle=`rgba(${p.r},${p.g},${p.b},${alpha.toFixed(2)})`;
+    ctx.fillRect(Math.round(p.x),Math.round(p.y),Math.ceil(p.size),Math.ceil(p.size));
+    return p.age<p.maxAge;
+  });
+}
+
 function drawCastle(c){
   const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H),tc=TC[c.team]||'#888';
-  ctx.fillStyle='#88889a';
-  ctx.fillRect(cx-13,cy-13,26,3);ctx.fillRect(cx-13,cy+10,26,3);
-  ctx.fillRect(cx-13,cy-13,3,26);ctx.fillRect(cx+10,cy-13,3,26);
-  ctx.fillStyle='#aaaabc';
-  for(let i=-11;i<=9;i+=4) ctx.fillRect(cx+i,cy-15,3,3);
+  const isDefeated=defeated.find(d=>d.castle===c);
+  const wallCol=isDefeated?'#554444':'#88889a';
+  const wallHi=isDefeated?'#665555':'#aaaabc';
+  const keepCol=isDefeated?'#553333':'#7070a0';
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.fillRect(cx-13,cy-11,28,28);
+
+  // Outer walls
+  ctx.fillStyle=wallCol;
+  ctx.fillRect(cx-13,cy-13,26,3);
+  ctx.fillRect(cx-13,cy+10,26,3);
+  ctx.fillRect(cx-13,cy-13,3,26);
+  ctx.fillRect(cx+10,cy-13,3,26);
+
+  // Wall highlight top
+  ctx.fillStyle=wallHi;
+  ctx.fillRect(cx-13,cy-13,26,1);
+  ctx.fillRect(cx-13,cy-13,1,26);
+
+  // Crenellations
+  ctx.fillStyle=wallHi;
+  for(let i=-11;i<=9;i+=4){
+    ctx.fillRect(cx+i,cy-16,3,4);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(cx+i,cy-16,1,4);
+    ctx.fillStyle=wallHi;
+  }
+
+  // Corner towers
   [[-12,-12],[10,-12],[-12,10],[10,10]].forEach(([tx,ty])=>{
-    ctx.fillStyle='#9999aa';ctx.fillRect(cx+tx,cy+ty,6,6);
-    ctx.fillStyle='#bbbbcc';ctx.fillRect(cx+tx,cy+ty,6,2);
-    ctx.fillStyle=tc;ctx.fillRect(cx+tx+1,cy+ty-2,3,2);
+    // Tower body
+    ctx.fillStyle=isDefeated?'#664444':'#9999aa';
+    ctx.fillRect(cx+tx-1,cy+ty-1,8,8);
+    // Tower top
+    ctx.fillStyle=isDefeated?'#775555':'#bbbbcc';
+    ctx.fillRect(cx+tx-1,cy+ty-1,8,2);
+    // Tower shadow side
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.fillRect(cx+tx+6,cy+ty,2,8);
+    // Flag
+    if(!isDefeated){
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx+tx+2,cy+ty-4,1,4);
+      ctx.fillStyle=tc;ctx.fillRect(cx+tx+3,cy+ty-4,3,2);
+    }
   });
-  ctx.fillStyle='#7070a0';ctx.fillRect(cx-5,cy-5,10,10);
-  ctx.fillStyle='#50508a';ctx.fillRect(cx-3,cy-1,6,6);
-  ctx.fillStyle='#222240';ctx.fillRect(cx-1,cy+1,3,5);
-  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx,cy-10,1,6);
-  ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-10,5,3);
+
+  // Keep (center)
+  ctx.fillStyle=keepCol;ctx.fillRect(cx-6,cy-6,12,12);
+  ctx.fillStyle=isDefeated?'#442222':'#50508a';ctx.fillRect(cx-4,cy-1,8,7);
+  // Keep gate
+  ctx.fillStyle='#111122';ctx.fillRect(cx-1,cy+1,3,6);
+  // Keep windows
+  ctx.fillStyle='rgba(150,200,255,0.5)';
+  ctx.fillRect(cx-4,cy-4,2,2);ctx.fillRect(cx+2,cy-4,2,2);
+  // Keep top
+  ctx.fillStyle=isDefeated?'#553333':'#8080b0';ctx.fillRect(cx-6,cy-6,12,2);
+
+  // Flag on keep
+  if(!isDefeated){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx,cy-12,1,7);
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-12,6,4);
+    // Flag shine
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx+1,cy-12,2,1);
+  } else {
+    // Broken flag
+    ctx.fillStyle='#555';ctx.fillRect(cx,cy-10,1,5);
+  }
+
+  // Power ring
   const pct=Math.min(1,c.power/250);
-  ctx.beginPath();ctx.arc(cx,cy,18,0-Math.PI/2,0-Math.PI/2+Math.PI*2*pct);
-  ctx.strokeStyle=tc;ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;
-  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx-10,cy+17,20,9);
-  ctx.fillStyle=tc;ctx.font='bold 7px monospace';ctx.textAlign='center';
-  ctx.fillText('⚡'+Math.floor(c.power),cx,cy+24);ctx.textAlign='left';
-  // Draw warehouse (small building next to castle)
-  const wx=cx+20,wy=cy+5;
-  ctx.fillStyle='#6a4a20';ctx.fillRect(wx,wy,10,8);
-  ctx.fillStyle='#8b6030';ctx.fillRect(wx,wy,10,3);
-  ctx.fillStyle='rgba(255,255,200,0.7)';ctx.fillRect(wx+1,wy+4,2,2);
-  // Resource display above warehouse
-  const r=RES[c.team];
-  if(r){
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(wx-2,wy-12,32,10);
-    ctx.font='6px monospace';ctx.textAlign='left';ctx.fillStyle='#fff';
-    ctx.fillText('🪵'+r.wood+' 🪨'+r.stone+' ⚙️'+r.iron,wx-1,wy-4);
+  ctx.beginPath();ctx.arc(cx,cy,20,0-Math.PI/2,0-Math.PI/2+Math.PI*2*pct);
+  ctx.strokeStyle=isDefeated?'rgba(150,50,50,0.5)':tc;
+  ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;
+
+  // Power label
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx-11,cy+18,22,9);
+  ctx.fillStyle=isDefeated?'#aa4444':tc;
+  ctx.font='bold 7px monospace';ctx.textAlign='center';
+  ctx.fillText(isDefeated?'💀':'⚡'+Math.floor(c.power),cx,cy+25);
+  ctx.textAlign='left';
+
+  // Warehouse (improved)
+  if(!isDefeated){
+    const wx=cx+22,wy=cy+2;
+    // Warehouse shadow
+    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(wx+1,wy+1,12,10);
+    // Warehouse body
+    ctx.fillStyle='#7a5a2a';ctx.fillRect(wx,wy,12,10);
+    // Warehouse roof
+    ctx.fillStyle='#9a7a3a';ctx.fillRect(wx,wy,12,3);
+    // Warehouse door
+    ctx.fillStyle='#3a2010';ctx.fillRect(wx+4,wy+5,4,5);
+    // Warehouse window
+    ctx.fillStyle='rgba(255,240,180,0.6)';ctx.fillRect(wx+1,wy+4,2,2);
+    // Resource display
+    const r=RES[c.team];
+    if(r){
+      ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(wx-1,wy-11,36,10);
+      ctx.font='bold 6px monospace';ctx.fillStyle='#aef';ctx.textAlign='left';
+      ctx.fillText('W:'+r.wood+' S:'+r.stone+' I:'+r.iron,wx,wy-4);
+    }
   }
   ctx.textAlign='left';
 }
@@ -489,6 +593,8 @@ function render(){
     if(!c) continue;
     if(t==='fire'){
       ctx.fillStyle=(tick+x+y)%3===0?'#ff8800':'#ff4400';
+      // Spawn fire particles occasionally
+      if(Math.random()<0.04) spawnFireParticle(x,y);
     } else {
       ctx.fillStyle=c;
     }
@@ -499,6 +605,7 @@ function render(){
   castles.forEach(drawCastle);
   armies.forEach(drawArmy);
   bots.forEach(drawBot);
+  updateParticles();
 }
 
 // ── WEAPONS ───────────────────────────────────────────────────
@@ -512,6 +619,11 @@ function explode(cx,cy,R,lava){
   }
   bots=bots.filter(b=>Math.hypot(b.x-cx,b.y-cy)>R*0.8);
   armies=armies.filter(a=>Math.hypot(a.x*W-cx,a.y*H-cy)>R*0.7);
+  // Explosion particles
+  spawnExplosion(cx,cy,30,255,150,0);   // orange
+  spawnExplosion(cx,cy,20,255,50,0);    // red
+  spawnExplosion(cx,cy,15,200,200,200); // smoke
+  if(lava) spawnExplosion(cx,cy,25,255,80,0); // extra fire
 }
 
 // ── TOOL ──────────────────────────────────────────────────────
