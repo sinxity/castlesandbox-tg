@@ -1107,7 +1107,11 @@ function applyTool(cx,cy,isFirst){
       bots=bots.filter(b=>!(b.x===cx&&b.y===cy));
     }
     else if(curTool.startsWith('vil_')){
-      if(!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
+      // Check if cell is walkable land (not water)
+      const cell=grid[cy]&&grid[cy][cx];
+      const cellType=cell?cell.type:'water';
+      const isWater=cellType==='water'||cellType==='lava';
+      if(isWater&&!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
       placeCastle(cx,cy,curTool.replace('vil_',''));
     }
     return;
