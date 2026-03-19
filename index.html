@@ -15,14 +15,14 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
   html,body{width:100%;height:100%;overflow:hidden;background:#0d1f35;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif}
   #app{display:flex;flex-direction:column;width:100%;height:100%;max-width:480px;margin:0 auto;position:relative}
   #cw{flex:1;position:relative;overflow:hidden;background:#0d1f35;touch-action:none}
-  #gc{display:block;position:absolute;top:0;left:0;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:0 0}
+  #gc{display:block;position:absolute;top:0;left:0;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:0 0;pointer-events:none}
   #loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0d1f35;color:#aad4ff;font-size:13px;z-index:100;gap:12px}
   #loading-bar-wrap{width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden}
   #loading-bar{height:100%;background:#378ADD;border-radius:2px;transition:width .1s;width:0%}
   #loading-title{font-size:16px;font-weight:600;color:#fff;letter-spacing:.5px}
 
   /* TOP BAR */
-  #topbar{position:absolute;top:env(safe-area-inset-top,8px);left:8px;right:8px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:10}
+  #topbar{position:absolute;top:env(safe-area-inset-top,8px);left:8px;right:8px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:50}
   #topbar>*{pointer-events:auto}
   #map-btns{display:flex;gap:5px}
   .tbtn{background:rgba(10,20,35,0.82);backdrop-filter:blur(8px);border:0.5px solid rgba(255,255,255,0.18);border-radius:10px;padding:7px 11px;font-size:11px;font-weight:600;color:#cce4ff;cursor:pointer;letter-spacing:.2px}
@@ -423,9 +423,35 @@ function drawBot(b){
   ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillRect(b.x,b.y,1,1);
 }
 
+// Color lookup for painted grid cells
+const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',
+  desert:'#d4a055',rock:'#666676',mountain:'#8a8a9a',snow:'#dde0f0',lava:'#cc3300',
+  tree:'#235a14',pine:'#1a4a0a',cactus:'#4a8a30',ore:'#7a4010',gold:'#e6b800',
+  crystal:'#6699cc',fire:'#ff4400',burned:'#2a2a2a',plague:'#446611',
+  house:'#a0522d',wall:'#888899',gate:'#665533',
+  vil_red:'#c0392b',vil_blue:'#2471a3',vil_green:'#1e8449',vil_gold:'#d4ac0d'};
+
 function render(){
+  // Base map
   if(mapCache) ctx.drawImage(mapCache,0,0);
   else{ctx.fillStyle='#0d1f35';ctx.fillRect(0,0,W,H);}
+  // Draw painted grid cells on top (3x3 pixel blocks for visibility)
+  const SZ=3;
+  for(let y=0;y<H;y+=SZ) for(let x=0;x<W;x+=SZ){
+    const cell=grid[y]&&grid[y][x];
+    if(!cell) continue;
+    const t=cell.type;
+    if(t==='water') continue; // water = show base map
+    const c=GCOL[t];
+    if(!c) continue;
+    if(t==='fire'){
+      ctx.fillStyle=(tick+x+y)%3===0?'#ff8800':'#ff4400';
+    } else {
+      ctx.fillStyle=c;
+    }
+    ctx.fillRect(x,y,SZ,SZ);
+  }
+  // Territory + castles + armies + bots
   ctx.drawImage(terrCanvas,0,0);
   castles.forEach(drawCastle);
   armies.forEach(drawArmy);
