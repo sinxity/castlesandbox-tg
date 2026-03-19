@@ -208,11 +208,17 @@ const D8=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
 let W=0,H=0,canvas,ctx,wrap;
 let landMask=null,mapCache=null,terrCanvas=null,terrCtx=null;
 let grid=[],bots=[],castles=[],armies=[],workers=[],tick=0,evts=[];
-// Resources per team: {wood, stone, iron, swords, armor, knights}
+// Resources per team
 const RES={red:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0},
            blue:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0},
            green:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0},
            gold:{wood:0,stone:0,iron:0,swords:0,armor:0,knights:0}};
+// Active raids: {team, knights[], tx, ty, targetTeam, phase, loot, rebuildTimer}
+let raids=[];
+// Defeated castles waiting to rebuild: {castle, timer}
+let defeated=[];
+// Loot animations: {x,y,team,age}
+let lootAnims=[];
 let curTab=0,curTool='water',brushSz=4;
 let isDrawing=false,drawStart=null;
 let rafId=null;
@@ -274,7 +280,7 @@ function initBase(){
   isPanMode=false;
   grid=[];
   for(let y=0;y<H;y++){grid[y]=[];for(let x=0;x<W;x++) grid[y][x]={type:'water',fa:0};}
-  bots=[];castles=[];armies=[];tick=0;evts=[];
+  bots=[];castles=[];armies=[];raids=[];defeated=[];lootAnims=[];tick=0;evts=[];
 }
 
 function isLand(x,y){
@@ -594,14 +600,31 @@ function updateCastles(){
       const worker=bots.find(b=>b.team===c.team&&!b.isKnight);
       if(worker){worker.isKnight=true;worker.hp=10;worker.maxhp=10;logEvent('🗡 '+c.team+' новый рыцарь!');}
     }
-    // When 10 knights — launch campaign
-    if(r.knights>=10){
+    // When 10 knights — launch raid
+    if(r.knights>=10&&!raids.find(rd=>rd.team===c.team)){
       const knights=bots.filter(b=>b.team===c.team&&b.isKnight);
       if(knights.length>=10){
-        logEvent('⚔️⚔️ '+c.team+' отправил 10 рыцарей в поход!');
-        r.knights=0;
+        const enemy=castles.find(ec=>ec.team!==c.team&&!defeated.find(d=>d.castle===ec));
+        if(enemy){
+          raids.push({team:c.team,knights:knights.slice(0,10),
+            tx:Math.round(enemy.nx*W),ty:Math.round(enemy.ny*H),
+            targetTeam:enemy.team,phase:'march',loot:0,battleTimer:0});
+          r.knights=0;
+          logEvent('⚔️ '+c.team+' — 10 рыцарей в поход на '+enemy.team+'!');
+        }
       }
     }
+  });
+  // Rebuild defeated castles after 180s (~3 min at 1tick/60ms)
+  defeated=defeated.filter(d=>{
+    d.timer--;
+    if(d.timer<=0){
+      d.castle.power=40;d.castle.radius=8;d.castle.attackCooldown=100;
+      computeTerritory(d.castle);rebuildTerritories();
+      logEvent('🔄 Замок '+d.castle.team+' восстановился!');
+      return false;
+    }
+    return true;
   });
 }
 
@@ -675,26 +698,10 @@ function updateBots(){
     const hx=Math.round(castle.nx*W),hy=Math.round(castle.ny*H);
 
     if(b.isKnight){
-      // Knight: find enemy castle and attack
-      const enemy=castles.find(c=>c.team!==b.team);
-      if(!enemy){
-        // Wander near home
-        moveToward(b,hx+Math.floor(Math.random()*20-10),hy+Math.floor(Math.random()*20-10));
-        return;
-      }
-      const ex=Math.round(enemy.nx*W),ey=Math.round(enemy.ny*H);
-      const arrived=moveToward(b,ex,ey);
-      if(arrived||Math.hypot(b.x-ex,b.y-ey)<15){
-        // Attack enemy bots
-        const ei=bots.findIndex((e,j)=>!dead.has(j)&&e.team!==b.team&&Math.hypot(e.x-b.x,e.y-b.y)<=4);
-        if(ei>=0){bots[ei].hp-=2;if(bots[ei].hp<=0){dead.add(ei);logEvent('⚔️ '+b.team+' убил бойца!');}}
-        // Drain enemy castle power
-        enemy.power=Math.max(0,enemy.power-0.5);
-        if(enemy.power<=0){
-          logEvent('🏴 '+b.team+' захватил замок '+enemy.team+'!');
-          const old=enemy.team;enemy.team=b.team;enemy.power=60;enemy.radius=10;
-          computeTerritory(enemy);rebuildTerritories();
-        }
+      // Knights are controlled by raid system — just wander near home if no raid
+      const myRaid=raids.find(r=>r.team===b.team&&r.knights.includes(b));
+      if(!myRaid){
+        if(Math.random()<0.3) moveToward(b,hx+Math.floor(Math.random()*16-8),hy+Math.floor(Math.random()*16-8));
       }
       return;
     }
@@ -739,6 +746,104 @@ function updateBots(){
   bots=bots.filter((_,i)=>!dead.has(i));
 }
 
+function updateRaids(){
+  raids=raids.filter(raid=>{
+    if(!raid.knights||raid.knights.length===0) return false;
+    const aliveKnights=raid.knights.filter(k=>bots.includes(k));
+    if(aliveKnights.length===0){logEvent('💀 Отряд '+raid.team+' уничтожен!');return false;}
+    raid.knights=aliveKnights;
+
+    if(raid.phase==='march'){
+      // Move all knights toward target
+      let allArrived=true;
+      aliveKnights.forEach((k,idx)=>{
+        const offsetX=(idx%4-2)*6,offsetY=(Math.floor(idx/4)-1)*6;
+        const tx=raid.tx+offsetX,ty=raid.ty+offsetY;
+        const arrived=moveToward(k,tx,ty);
+        if(!arrived) allArrived=false;
+      });
+      if(allArrived||aliveKnights.some(k=>Math.hypot(k.x-raid.tx,k.y-raid.ty)<20)){
+        raid.phase='battle';raid.battleTimer=0;
+        logEvent('⚔️ '+raid.team+' атакует '+raid.targetTeam+'!');
+      }
+    } else if(raid.phase==='battle'){
+      raid.battleTimer++;
+      const enemy=castles.find(c=>c.team===raid.targetTeam);
+      if(!enemy){raid.phase='loot';return true;}
+
+      // Knights attack enemy bots and drain castle
+      aliveKnights.forEach(k=>{
+        const ei=bots.findIndex(e=>e.team!==k.team&&Math.hypot(e.x-k.x,e.y-k.y)<=6);
+        if(ei>=0){bots[ei].hp-=1;if(bots[ei].hp<=0) bots.splice(ei,1);}
+      });
+      enemy.power=Math.max(0,enemy.power-aliveKnights.length*0.4);
+
+      // Spawn clash particle
+      if(raid.battleTimer%5===0){
+        lootAnims.push({x:raid.tx+Math.random()*20-10,y:raid.ty+Math.random()*20-10,
+          team:raid.team,type:'clash',age:0});
+      }
+
+      if(enemy.power<=0){
+        // Victory! Loot resources
+        const er=RES[raid.targetTeam];
+        const myR=RES[raid.team];
+        const lootWood=Math.floor(er.wood*0.5);
+        const lootStone=Math.floor(er.stone*0.5);
+        const lootIron=Math.floor(er.iron*0.5);
+        myR.wood=Math.min(99,myR.wood+lootWood);
+        myR.stone=Math.min(99,myR.stone+lootStone);
+        myR.iron=Math.min(99,myR.iron+lootIron);
+        er.wood-=lootWood;er.stone-=lootStone;er.iron-=lootIron;
+        raid.loot=lootWood+lootStone+lootIron;
+        // Defeat the castle
+        defeated.push({castle:enemy,timer:3000});
+        enemy.power=0;enemy.radius=3;
+        computeTerritory(enemy);rebuildTerritories();
+        logEvent('🏆 '+raid.team+' захватил замок! +'+raid.loot+' ресурсов');
+        lootAnims.push({x:raid.tx,y:raid.ty,team:raid.team,type:'victory',age:0});
+        raid.phase='return';
+      } else if(raid.battleTimer>400){
+        // Retreat
+        logEvent('🏃 '+raid.team+' отступил — замок устоял!');
+        raid.phase='return';
+      }
+    } else if(raid.phase==='return'){
+      const castle=castles.find(c=>c.team===raid.team);
+      if(!castle) return false;
+      const hx=Math.round(castle.nx*W),hy=Math.round(castle.ny*H);
+      let allHome=true;
+      aliveKnights.forEach((k,idx)=>{
+        const arrived=moveToward(k,hx+idx*3-15,hy);
+        if(!arrived) allHome=false;
+      });
+      if(allHome){
+        logEvent('🏠 '+raid.team+' вернулся домой!');
+        // Knights become workers again
+        aliveKnights.forEach(k=>{k.isKnight=false;k.hp=5;k.maxhp=5;k.state='seek';});
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Draw loot animations
+  lootAnims=lootAnims.filter(a=>{
+    a.age++;
+    if(a.type==='clash'){
+      ctx.fillStyle='rgba(255,200,0,'+Math.max(0,0.8-a.age/20)+')';
+      ctx.font='8px serif';ctx.textAlign='center';
+      ctx.fillText('⚔',a.x,a.y-a.age*0.5);
+    } else if(a.type==='victory'){
+      ctx.fillStyle='rgba(255,215,0,'+Math.max(0,1-a.age/60)+')';
+      ctx.font=(8+a.age/4)+'px serif';ctx.textAlign='center';
+      ctx.fillText('🏆',a.x,a.y-a.age);
+    }
+    ctx.textAlign='left';
+    return a.age<60;
+  });
+}
+
 function updateFire(){
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const c=grid[y][x];if(c.type!=='fire') continue;
@@ -781,6 +886,7 @@ function loop(ts){
   if(tick%2===0) updateBots();
   if(tick%3===0) updateFire();
   if(tick%4===0) updateArmies();
+  if(tick%3===0) updateRaids();
   if(tick%30===0) updateCastles();
   if(tick%20===0) updateStats();
   render();
