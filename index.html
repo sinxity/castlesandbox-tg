@@ -984,42 +984,52 @@ function drawCactus(x,y){
 }
 
 function drawHouse(x,y,owner){
-  // Get roof color from owner faction
-  const roofColors={
-    red:['#c0392b','#e74c3c','#ff6655'],
-    blue:['#1a5a99','#2471a3','#3498db'],
+  // 16px wide house
+  const rc=owner?{
+    red:['#882222','#aa2a2a','#cc3333'],
+    blue:['#1a4a99','#2255bb','#3366dd'],
     green:['#1a6632','#1e8449','#27ae60'],
-    gold:['#b8860b','#d4ac0d','#f1c40f'],
-  };
-  const rc=roofColors[owner]||['#5a4a3a','#7a6a5a','#9a8a7a'];
+    gold:['#8a6010','#b8860b','#d4ac0d'],
+  }[owner]||['#1a4a99','#2255bb','#3366dd']:['#1a4a99','#2255bb','#3366dd'];
   // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(x+2,y+8,8,2);
-  // Stone foundation
-  ctx.fillStyle='#5a4a38';ctx.fillRect(x+1,y+6,7,4);
-  ctx.fillStyle='rgba(255,255,255,0.08)';ctx.fillRect(x+1,y+6,7,1);
-  // Timber walls
-  ctx.fillStyle='#c8a878';ctx.fillRect(x+1,y+4,7,3);
-  ctx.fillStyle='#b09060';ctx.fillRect(x+1,y+5,7,1); // beam
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+7,y+4,1,6);// side shadow
-  // Roof - 3 layers for depth
-  ctx.fillStyle=rc[0];ctx.fillRect(x+0,y+3,9,2);
-  ctx.fillStyle=rc[1];ctx.fillRect(x+1,y+1,7,3);
-  ctx.fillStyle=rc[2];ctx.fillRect(x+2,y+0,5,2);
-  // Roof ridge highlight
-  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(x+2,y,3,1);
-  // Roof shadow underside
-  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+0,y+4,9,1);
-  // Door (arched)
-  ctx.fillStyle='#2a1808';ctx.fillRect(x+3,y+5,3,5);
-  ctx.fillStyle='#3a2818';ctx.fillRect(x+3,y+5,3,1);// arch
-  ctx.fillStyle='rgba(255,180,80,0.2)';ctx.fillRect(x+3,y+5,1,1);// door light
-  // Windows with shutters
-  ctx.fillStyle='#88ccff';ctx.fillRect(x+1,y+4,2,2);
-  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillRect(x+1,y+4,1,1);
-  ctx.fillStyle=rc[0];ctx.fillRect(x+0,y+4,1,2);ctx.fillRect(x+3,y+4,1,2);// shutters
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+12,14,2);
+  // Foundation
+  ctx.fillStyle='#7a6050';ctx.fillRect(x,y+8,16,4);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+14,y+8,2,4);
+  // Walls
+  ctx.fillStyle='#d4bc90';ctx.fillRect(x+1,y+5,14,4);
+  ctx.fillStyle='#b89a70';ctx.fillRect(x+14,y+5,2,4);
+  ctx.fillStyle='#8a5a20';ctx.fillRect(x+1,y+7,14,1); // beam
+  // Roof base
+  ctx.fillStyle=rc[0];ctx.fillRect(x,y+3,16,3);
+  ctx.fillStyle=rc[1];ctx.fillRect(x+1,y+2,14,2);
+  ctx.fillStyle=rc[2];ctx.fillRect(x+3,y+1,10,2);
+  ctx.fillStyle=rc[2];ctx.fillRect(x+5,y,6,2); // peak
+  // Roof highlight
+  ctx.fillStyle='rgba(255,255,255,0.25)';ctx.fillRect(x+3,y+1,4,1);
+  // Roof shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x,y+5,16,1);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+15,y+2,1,4);
   // Chimney
-  ctx.fillStyle='#666';ctx.fillRect(x+6,y-1,2,3);
-  ctx.fillStyle='#444';ctx.fillRect(x+6,y-1,2,1);
+  ctx.fillStyle='#7a5540';ctx.fillRect(x+12,y-1,2,4);
+  ctx.fillStyle='#3a2515';ctx.fillRect(x+12,y-1,2,1);
+  // Door centered
+  ctx.fillStyle='#2a1808';ctx.fillRect(x+7,y+6,3,6);
+  ctx.fillStyle='#3a2818';ctx.fillRect(x+7,y+6,3,1);
+  ctx.fillStyle='#cc8822';ctx.fillRect(x+9,y+9,1,1);
+  // Window left
+  ctx.fillStyle='#88ccff';ctx.fillRect(x+2,y+5,3,3);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillRect(x+2,y+5,1,1);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+4,y+5,1,3);ctx.fillRect(x+2,y+7,3,1);
+  // Window right
+  ctx.fillStyle='#88ccff';ctx.fillRect(x+11,y+5,3,3);
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillRect(x+11,y+5,1,1);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+13,y+5,1,3);ctx.fillRect(x+11,y+7,3,1);
+  // Team flag on roof
+  if(owner&&TC[owner]){
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x+8,y-3,1,3);
+    ctx.fillStyle=TC[owner];ctx.fillRect(x+9,y-3,4,2);
+  }
 }
 
 function hasWallAt(x,y){
@@ -1029,42 +1039,38 @@ function hasWallAt(x,y){
 }
 
 function drawWall(x,y){
-  const S=10; // sprite step
+  const S=10;
   const N=hasWallAt(x,y-S),S2=hasWallAt(x,y+S);
-  const E=hasWallAt(x+S,y),W2=hasWallAt(x-S,y);
-  const isHoriz=E||W2;
-  const isVert=N||S2;
+  const E=hasWallAt(x+S,y),Wl=hasWallAt(x-S,y);
 
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+1,y+7,7,1);
+  // Base stone - always full block
+  ctx.fillStyle='#55556a';ctx.fillRect(x,y,10,10);
+  // Top highlight
+  ctx.fillStyle='#888899';ctx.fillRect(x,y,10,2);
+  // Bottom shadow
+  ctx.fillStyle='#333344';ctx.fillRect(x,y+8,10,2);
+  // Right shadow
+  ctx.fillStyle='#444455';ctx.fillRect(x+8,y,2,10);
 
-  if(isHoriz&&!isVert){
-    // Horizontal wall segment - wider, flatter
-    ctx.fillStyle='#666676';ctx.fillRect(x,y+2,8,6);
-    ctx.fillStyle='#888899';ctx.fillRect(x,y+2,8,2);
-    ctx.fillStyle='#777788';ctx.fillRect(x,y+1,8,2);
-    // Crenels top
-    ctx.fillStyle='#555566';ctx.fillRect(x,y,3,2);ctx.fillRect(x+5,y,3,2);
-    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x,y+5,8,1);
-  } else if(isVert&&!isHoriz){
-    // Vertical wall segment - narrower
-    ctx.fillStyle='#666676';ctx.fillRect(x+2,y,4,8);
-    ctx.fillStyle='#888899';ctx.fillRect(x+2,y,2,8);
-    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+5,y,1,8);
-  } else if(isHoriz&&isVert){
-    // Corner/junction - solid block
-    ctx.fillStyle='#666676';ctx.fillRect(x,y,8,8);
-    ctx.fillStyle='#888899';ctx.fillRect(x,y,3,3);
-    ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+6,y,2,8);ctx.fillRect(x,y+6,8,2);
-  } else {
-    // Standalone wall - default
-    ctx.fillStyle='#666676';ctx.fillRect(x,y+2,8,6);
-    ctx.fillStyle='#888899';ctx.fillRect(x,y+2,8,2);
-    ctx.fillStyle='#555566';ctx.fillRect(x,y,3,2);ctx.fillRect(x+5,y,3,2);
+  // Crenellations - only on exposed (unconnected) sides
+  ctx.fillStyle='#6a6a7a';
+  if(!N){ // top exposed - add crenels
+    ctx.fillStyle='#55556a';ctx.fillRect(x,y,10,4);
+    ctx.fillStyle='#777788';ctx.fillRect(x,y,4,4);
+    ctx.fillStyle='#777788';ctx.fillRect(x+6,y,4,4);
+    ctx.fillStyle='#333344';ctx.fillRect(x+4,y,2,4);// merlon gap
+    ctx.fillStyle='#888899';ctx.fillRect(x,y,4,1);
+    ctx.fillStyle='#888899';ctx.fillRect(x+6,y,4,1);
   }
-  // Mortar texture
-  ctx.fillStyle='rgba(0,0,0,0.1)';
-  ctx.fillRect(x+3,y+3,1,3);
+  // Connect gaps between wall segments visually
+  if(E) ctx.fillStyle='#55556a',ctx.fillRect(x+8,y+2,4,6);
+  if(Wl) ctx.fillStyle='#55556a',ctx.fillRect(x-2,y+2,4,6);
+  if(S2) ctx.fillStyle='#55556a',ctx.fillRect(x+2,y+8,6,4);
+
+  // Mortar lines
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.fillRect(x,y+5,10,1);
+  ctx.fillRect(x+5,y,1,10);
 }
 
 function drawGate(x,y){
@@ -1622,8 +1628,9 @@ wrap.addEventListener('touchstart',e=>{
       panStartX=t.clientX;panStartY=t.clientY;
       panStartCamX=camX;panStartCamY=camY;
     } else {
+      lastSpriteCell={x:-99,y:-99};lastPaintPos={x:-99,y:-99};
       isDrawing=true;
-      paintAt(t.clientX,t.clientY);
+      paintAt(t.clientX,t.clientY,true);
     }
   }
 },{passive:false});
