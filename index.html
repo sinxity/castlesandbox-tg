@@ -869,10 +869,16 @@ function updateDayNight(){
 // Sprites drawn at fixed 8x8 px regardless of brush size
 // Only drawn every 8px to avoid crowding
 function drawSprites(){
-  const STEP=10;
-  for(let y=0;y<H;y+=STEP) for(let x=0;x<W;x+=STEP){
+  // Draw 10px sprites first
+  for(let y=0;y<H;y+=10) for(let x=0;x<W;x+=10){
     const cell=grid[y]&&grid[y][x];if(!cell) continue;
+    if(cell.type==='house') continue; // houses drawn separately
     drawSprite(cell.type,x,y,cell.owner);
+  }
+  // Draw 20px houses
+  for(let y=0;y<H;y+=20) for(let x=0;x<W;x+=20){
+    const cell=grid[y]&&grid[y][x];if(!cell) continue;
+    if(cell.type==='house') drawHouse(x,y,cell.owner);
   }
 }
 
@@ -1127,16 +1133,17 @@ let lastSpriteCell={x:-99,y:-99}; // prevent double-placing on same cell
 let lastPaintPos={x:-99,y:-99}; // for interpolation
 
 function placeSprite(cx,cy){
-  // Interpolate from last position to current to fill gaps
+  // Grid size depends on tool
+  const gridSz=curTool==='house'?20:10;
   const lx=lastPaintPos.x<0?cx:lastPaintPos.x;
   const ly=lastPaintPos.y<0?cy:lastPaintPos.y;
   const dist=Math.hypot(cx-lx,cy-ly);
-  const steps=Math.max(1,Math.ceil(dist/8));
+  const steps=Math.max(1,Math.ceil(dist/gridSz));
   for(let s=0;s<=steps;s++){
     const ix=Math.round(lx+(cx-lx)*s/steps);
     const iy=Math.round(ly+(cy-ly)*s/steps);
-    const sx=Math.floor(ix/10)*10;
-    const sy=Math.floor(iy/10)*10;
+    const sx=Math.floor(ix/gridSz)*gridSz;
+    const sy=Math.floor(iy/gridSz)*gridSz;
     if(sx<0||sy<0||sx>=W||sy>=H) continue;
     if(sx===lastSpriteCell.x&&sy===lastSpriteCell.y) continue;
     lastSpriteCell={x:sx,y:sy};
@@ -1149,19 +1156,22 @@ function placeSprite(cx,cy){
 }
 
 function applyTool(cx,cy,isFirst){
-  if(cx<0||cy<0||cx>=W||cy>=H) return;
+  // Clamp coords to canvas bounds
+  const safeCx=Math.max(0,Math.min(W-1,cx));
+  const safeCy=Math.max(0,Math.min(H-1,cy));
 
   // One-shot: only on first touch
   if(ONESHOT_TOOLS.has(curTool)){
     if(!isFirst) return;
-    if(curTool==='bomb') explode(cx,cy,20,false);
-    else if(curTool==='meteor') explode(cx,cy,40,true);
+    if(curTool==='bomb') explode(safeCx,safeCy,20,false);
+    else if(curTool==='meteor') explode(safeCx,safeCy,40,true);
     else if(curTool==='lightning'){
-      grid[cy][cx].type='burned';
-      bots=bots.filter(b=>!(b.x===cx&&b.y===cy));
+      if(grid[safeCy]&&grid[safeCy][safeCx]) grid[safeCy][safeCx].type='burned';
+      bots=bots.filter(b=>!(b.x===safeCx&&b.y===safeCy));
     }
     else if(curTool.startsWith('vil_')){
-      placeCastle(cx,cy,curTool.replace('vil_',''));
+      logEvent('🏰 Ставим замок на '+safeCx+','+safeCy);
+      placeCastle(safeCx,safeCy,curTool.replace('vil_',''));
     }
     return;
   }
