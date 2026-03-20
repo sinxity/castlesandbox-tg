@@ -195,6 +195,24 @@ function getFst(nx,ny,W){
 
 // ── CONSTANTS ─────────────────────────────────────────────────
 const TC={red:'#e74c3c',blue:'#3498db',green:'#2ecc71',gold:'#f1c40f'};
+// Castle level system
+const LEVEL_XP=[0,100,250,500,900,1500]; // XP needed for each level
+const LEVEL_DATA=[
+  {}, // level 0 unused
+  {name:'Деревня',   workers:5,  maxPop:15, maxKnights:0,  canBuild:false, canTrade:false},
+  {name:'Поселение', workers:10, maxPop:25, maxKnights:5,  canBuild:true,  canTrade:false},
+  {name:'Город',     workers:15, maxPop:40, maxKnights:10, canBuild:true,  canTrade:false},
+  {name:'Замок',     workers:20, maxPop:60, maxKnights:20, canBuild:true,  canTrade:true},
+  {name:'Цитадель',  workers:30, maxPop:100,maxKnights:40, canBuild:true,  canTrade:true},
+];
+
+// Castle level colors (wall material changes)
+const LEVEL_COLORS={
+  wall:  ['#886644','#777788','#8888aa','#9999bb','#aaaacc'],
+  wallHi:['#aa8866','#9999aa','#aaaacc','#bbbbdd','#ccccee'],
+  keep:  ['#664422','#606080','#7070a0','#8080b0','#9090cc'],
+};
+
 // Faction traits: {buildSpeed, harvestMult, fightMult, growMult}
 const TRAITS={
   red: {buildSpeed:0,harvestMult:0.8,fightMult:2.0,growMult:0.8,label:'Воины'},
@@ -486,85 +504,103 @@ function updateParticles(){
 function drawCastle(c){
   const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H),tc=TC[c.team]||'#888';
   const isDefeated=defeated.find(d=>d.castle===c);
-  const wallCol=isDefeated?'#554444':'#88889a';
-  const wallHi=isDefeated?'#665555':'#aaaabc';
-  const keepCol=isDefeated?'#553333':'#7070a0';
+  const lv=Math.max(1,Math.min(5,c.level||1));
+  const li=lv-1;
+  const wallCol=isDefeated?'#554444':LEVEL_COLORS.wall[li];
+  const wallHi=isDefeated?'#665555':LEVEL_COLORS.wallHi[li];
+  const keepCol=isDefeated?'#553333':LEVEL_COLORS.keep[li];
+  // Scale castle size with level
+  const S=8+lv*2; // lv1=10, lv2=12, lv3=14, lv4=16, lv5=18
 
   // Shadow
   ctx.fillStyle='rgba(0,0,0,0.3)';
-  ctx.fillRect(cx-13,cy-11,28,28);
+  ctx.fillRect(cx-S-3,cy-S-1,S*2+8,S*2+8);
 
-  // Outer walls
+  // Outer walls - scale with level
   ctx.fillStyle=wallCol;
-  ctx.fillRect(cx-13,cy-13,26,3);
-  ctx.fillRect(cx-13,cy+10,26,3);
-  ctx.fillRect(cx-13,cy-13,3,26);
-  ctx.fillRect(cx+10,cy-13,3,26);
-
-  // Wall highlight top
+  ctx.fillRect(cx-S,cy-S,S*2,3);
+  ctx.fillRect(cx-S,cy+S-3,S*2,3);
+  ctx.fillRect(cx-S,cy-S,3,S*2);
+  ctx.fillRect(cx+S-3,cy-S,3,S*2);
+  // Wall highlight
   ctx.fillStyle=wallHi;
-  ctx.fillRect(cx-13,cy-13,26,1);
-  ctx.fillRect(cx-13,cy-13,1,26);
+  ctx.fillRect(cx-S,cy-S,S*2,1);
+  ctx.fillRect(cx-S,cy-S,1,S*2);
 
-  // Crenellations
+  // Crenellations - more at higher levels
   ctx.fillStyle=wallHi;
-  for(let i=-11;i<=9;i+=4){
-    ctx.fillRect(cx+i,cy-16,3,4);
-    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(cx+i,cy-16,1,4);
+  const crenStep=Math.max(3,5-lv);
+  for(let i=-(S-2);i<=S-2;i+=crenStep){
+    ctx.fillRect(cx+i,cy-S-3,2,4);
+    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(cx+i,cy-S-3,1,4);
     ctx.fillStyle=wallHi;
   }
 
-  // Corner towers
-  [[-12,-12],[10,-12],[-12,10],[10,10]].forEach(([tx,ty])=>{
-    // Tower body
-    ctx.fillStyle=isDefeated?'#664444':'#9999aa';
-    ctx.fillRect(cx+tx-1,cy+ty-1,8,8);
-    // Tower top
-    ctx.fillStyle=isDefeated?'#775555':'#bbbbcc';
-    ctx.fillRect(cx+tx-1,cy+ty-1,8,2);
-    // Tower shadow side
-    ctx.fillStyle='rgba(0,0,0,0.2)';
-    ctx.fillRect(cx+tx+6,cy+ty,2,8);
-    // Flag
+  // Corner towers - grow with level
+  const tw=5+lv,th=6+lv;
+  const toff=S-1;
+  [[-toff,-toff],[toff-tw+1,-toff],[-toff,toff-th+1],[toff-tw+1,toff-th+1]].forEach(([tx,ty])=>{
+    ctx.fillStyle=isDefeated?'#664444':'#9999aa';ctx.fillRect(cx+tx,cy+ty,tw,th);
+    ctx.fillStyle=isDefeated?'#775555':wallHi;ctx.fillRect(cx+tx,cy+ty,tw,2);
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(cx+tx+tw-1,cy+ty,1,th);
     if(!isDefeated){
-      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx+tx+2,cy+ty-4,1,4);
-      ctx.fillStyle=tc;ctx.fillRect(cx+tx+3,cy+ty-4,3,2);
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx+tx+1,cy+ty-4,1,4);
+      ctx.fillStyle=tc;ctx.fillRect(cx+tx+2,cy+ty-4,3,2);
     }
   });
 
-  // Keep (center)
-  ctx.fillStyle=keepCol;ctx.fillRect(cx-6,cy-6,12,12);
-  ctx.fillStyle=isDefeated?'#442222':'#50508a';ctx.fillRect(cx-4,cy-1,8,7);
-  // Keep gate
-  ctx.fillStyle='#111122';ctx.fillRect(cx-1,cy+1,3,6);
-  // Keep windows
+  // Keep center - grows with level
+  const ks=4+lv;
+  ctx.fillStyle=keepCol;ctx.fillRect(cx-ks,cy-ks,ks*2,ks*2);
+  ctx.fillStyle=isDefeated?'#442222':'#50508a';ctx.fillRect(cx-ks+2,cy,ks*2-4,ks);
+  ctx.fillStyle='#111122';ctx.fillRect(cx-1,cy+1,3,ks);
   ctx.fillStyle='rgba(150,200,255,0.5)';
-  ctx.fillRect(cx-4,cy-4,2,2);ctx.fillRect(cx+2,cy-4,2,2);
-  // Keep top
-  ctx.fillStyle=isDefeated?'#553333':'#8080b0';ctx.fillRect(cx-6,cy-6,12,2);
+  ctx.fillRect(cx-ks+1,cy-ks+2,2,2);ctx.fillRect(cx+ks-3,cy-ks+2,2,2);
+  ctx.fillStyle=isDefeated?'#553333':wallHi;ctx.fillRect(cx-ks,cy-ks,ks*2,2);
 
-  // Flag on keep
-  if(!isDefeated){
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx,cy-12,1,7);
-    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-12,6,4);
-    // Flag shine
-    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx+1,cy-12,2,1);
-  } else {
-    // Broken flag
-    ctx.fillStyle='#555';ctx.fillRect(cx,cy-10,1,5);
+  // Extra details at higher levels
+  if(lv>=3){
+    // Inner wall ring
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.fillRect(cx-ks-3,cy-ks-3,ks*2+6,2);
+    ctx.fillRect(cx-ks-3,cy+ks+1,ks*2+6,2);
+  }
+  if(lv>=4){
+    // Moat hint
+    ctx.fillStyle='rgba(30,60,120,0.3)';
+    ctx.fillRect(cx-S-4,cy-S-4,S*2+8,3);
+    ctx.fillRect(cx-S-4,cy+S+1,S*2+8,3);
+    ctx.fillRect(cx-S-4,cy-S-4,3,S*2+8);
+    ctx.fillRect(cx+S+1,cy-S-4,3,S*2+8);
+  }
+  if(lv>=5){
+    // Golden spires
+    ctx.fillStyle='#d4ac0d';
+    ctx.fillRect(cx,cy-S-8,2,6);
+    ctx.fillRect(cx-S-1,cy-S/2,1,4);
+    ctx.fillRect(cx+S,cy-S/2,1,4);
   }
 
-  // Power ring
-  const pct=Math.min(1,c.power/250);
-  ctx.beginPath();ctx.arc(cx,cy,20,0-Math.PI/2,0-Math.PI/2+Math.PI*2*pct);
+  // Main flag
+  if(!isDefeated){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx,cy-ks-8,1,7);
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-ks-8,6,4);
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx+1,cy-ks-8,2,1);
+  } else {
+    ctx.fillStyle='#555';ctx.fillRect(cx,cy-ks-6,1,5);
+  }
+
+  // Level indicator ring + XP arc
+  const xpPct=Math.min(1,(c.xp||0)/LEVEL_XP[Math.min(lv,4)]);
+  ctx.beginPath();ctx.arc(cx,cy,S+4,0-Math.PI/2,0-Math.PI/2+Math.PI*2*xpPct);
   ctx.strokeStyle=isDefeated?'rgba(150,50,50,0.5)':tc;
   ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;
 
-  // Power label
-  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx-11,cy+18,22,9);
-  ctx.fillStyle=isDefeated?'#aa4444':tc;
-  ctx.font='bold 7px monospace';ctx.textAlign='center';
-  ctx.fillText(isDefeated?'💀':'⚡'+Math.floor(c.power),cx,cy+25);
+  // Level badge
+  const ld=LEVEL_DATA[lv];
+  ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(cx-14,cy+S+2,28,10);
+  ctx.fillStyle=tc;ctx.font='bold 6px monospace';ctx.textAlign='center';
+  ctx.fillText('Lv'+lv+' '+( ld?ld.name:''),cx,cy+S+10);
   ctx.textAlign='left';
 
   // Warehouse (improved)
@@ -1329,7 +1365,7 @@ function placeCastle(cx,cy,team){
   castles=castles.filter(c=>c.team!==team);
   // Remove old workers/knights of this team
   bots=bots.filter(b=>b.team!==team);
-  const c={nx:cx/W,ny:cy/H,team,power:50,radius:6,cells:[],attackCooldown:0,craftTimer:0};
+  const c={nx:cx/W,ny:cy/H,team,power:50,radius:6,cells:[],attackCooldown:0,craftTimer:0,level:1,xp:0};
   computeTerritory(c);castles.push(c);
   rebuildTerritories();
   // Reset resources
@@ -1352,8 +1388,39 @@ function placeCastle(cx,cy,team){
 function updateCastles(){
   let dirty=false;
   castles.forEach(c=>{
-    c.power=Math.min(300,c.power+0.08);
-    const nr=Math.min(22,6+Math.floor(c.power/12));
+    c.power=Math.min(500,c.power+0.08);
+    if(!c.level) c.level=1;
+    if(!c.xp) c.xp=0;
+    // Gain XP from resources collected
+    const r=RES[c.team];
+    const totalRes=(r.wood+r.stone+r.iron);
+    c.xp+=0.02+totalRes*0.001;
+    // Level up check
+    const maxLv=5;
+    if(c.level<maxLv&&c.xp>=LEVEL_XP[c.level]){
+      const cost={wood:c.level*20,stone:c.level*15,iron:c.level*10};
+      if(r.wood>=cost.wood&&r.stone>=cost.stone&&r.iron>=cost.iron){
+        r.wood-=cost.wood;r.stone-=cost.stone;r.iron-=cost.iron;
+        c.level++;c.xp=0;
+        logEvent('🏰 '+c.team+' → Уровень '+c.level+': '+(LEVEL_DATA[c.level]||{}).name+'!');
+        // Spawn more workers on level up
+        const hx=Math.round(c.nx*W),hy=Math.round(c.ny*H);
+        const newWorkers=3;
+        let spawned=0;
+        for(let dy=-20;dy<=20&&spawned<newWorkers;dy++) for(let dx=-20;dx<=20&&spawned<newWorkers;dx++){
+          const nx2=hx+dx,ny2=hy+dy;
+          if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+          if(isLand(nx2,ny2)&&Math.random()<0.3){
+            bots.push({x:nx2,y:ny2,team:c.team,hp:5,maxhp:5,timer:Math.floor(Math.random()*20),
+              isKnight:false,carrying:null,res:0,homeX:hx,homeY:hy,state:'seek'});
+            spawned++;
+          }
+        }
+        dirty=true;
+      }
+    }
+    // Territory radius based on level
+    const nr=Math.min(30,8+c.level*4);
     if(nr!==c.radius){c.radius=nr;computeTerritory(c);dirty=true;}
     if(c.attackCooldown>0){c.attackCooldown--;return;}
     const enemies=castles.filter(e=>e.team!==c.team);
@@ -1374,10 +1441,9 @@ function updateCastles(){
     if(r.wood>=3&&r.iron>=2){r.wood-=3;r.iron-=2;r.swords++;logEvent('⚔️ '+c.team+' скрафтил меч!');}
     // Craft armor: 4 stone + 2 iron
     if(r.stone>=4&&r.iron>=2){r.stone-=4;r.iron-=2;r.armor++;logEvent('🛡 '+c.team+' скрафтил броню!');}
-    // Equip knight: 1 sword + 1 armor
-    if(r.swords>=1&&r.armor>=1){
+    // Equip knight: requires level 3+
+    if((c.level||1)>=3&&r.swords>=1&&r.armor>=1){
       r.swords--;r.armor--;r.knights++;
-      // Find a worker and upgrade to knight
       const worker=bots.find(b=>b.team===c.team&&!b.isKnight);
       if(worker){worker.isKnight=true;worker.hp=10;worker.maxhp=10;logEvent('🗡 '+c.team+' новый рыцарь!');}
     }
@@ -1694,7 +1760,7 @@ function updateStats(){
   document.getElementById('sbl').textContent=c.blue||0;
   document.getElementById('sg').textContent=c.green||0;
   document.getElementById('sy').textContent=c.gold||0;
-  // Show resources of first active castle team
+  // Show resources of first active castle
   const active=castles[0];
   if(active){
     const r=RES[active.team];
