@@ -628,27 +628,110 @@ const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',
   vil_red:'#c0392b',vil_blue:'#2471a3',vil_green:'#1e8449',vil_gold:'#d4ac0d'};
 
 // Terrain base colors (2x2 px per cell)
-const TBASE={
-  water:    [[13,45,95],[18,75,148],[24,95,170]],
-  sand:     [[200,165,70],[210,175,80],[220,185,90]],
-  grass:    [[48,88,32],[55,100,38],[65,112,46]],
-  jungle:   [[15,78,8],[20,90,12],[28,108,18]],
-  desert:   [[205,155,70],[215,165,80],[225,175,90]],
-  rock:     [[88,88,100],[95,95,108],[105,105,120]],
-  mountain: [[122,122,140],[130,130,148],[145,145,165]],
-  snow:     [[215,222,238],[220,228,245],[232,240,255]],
-  lava:     [[180,40,0],[200,50,0],[220,60,0]],
-  tree:     [[25,72,14],[30,80,18],[38,92,25]],
-  pine:     [[16,55,5],[20,65,8],[26,75,12]],
-  burned:   [[35,32,32],[38,35,35],[45,40,40]],
-  plague:   [[35,50,12],[38,55,15],[45,65,20]],
+// Dithering patterns: each biome has a 3x3 pattern of color indices
+// Pattern indices map to color palette entries
+// This gives sub-pixel texture within each terrain block
+const DITHER_PAL={
+  water:[
+    [13,42,88],[16,55,110],[20,72,138],  // deep,mid,shallow
+    [18,65,125],[13,42,88],[22,80,148],
+    [15,50,100],[20,72,138],[13,42,88],
+  ],
+  sand:[
+    [205,172,72],[218,185,82],[230,195,90],
+    [210,178,76],[198,165,68],[222,188,85],
+    [215,182,80],[205,172,72],[212,180,78],
+  ],
+  grass:[
+    [45,85,30],[58,105,40],[50,92,34],
+    [62,110,44],[45,85,30],[55,100,38],
+    [48,88,32],[65,115,46],[45,82,28],
+  ],
+  jungle:[
+    [12,72,6],[22,95,14],[18,85,10],
+    [25,105,18],[12,70,5],[20,90,12],
+    [15,78,8],[28,110,20],[12,72,6],
+  ],
+  desert:[
+    [210,160,72],[225,175,85],[215,168,78],
+    [220,170,80],[205,158,70],[228,178,88],
+    [212,165,75],[218,172,82],[205,158,70],
+  ],
+  rock:[
+    [82,82,95],[98,98,112],[88,88,102],
+    [95,95,108],[78,78,90],[102,102,116],
+    [85,85,98],[92,92,105],[80,80,92],
+  ],
+  // Mountain uses special volumetric rendering - see buildTerrainCache
+  mountain:[
+    [118,118,136],[135,135,152],[148,148,168],
+    [125,125,142],[110,110,128],[142,142,160],
+    [130,130,148],[120,120,138],[115,115,132],
+  ],
+  snow:[
+    [218,225,242],[228,235,250],[235,242,255],
+    [222,230,246],[215,222,238],[232,240,255],
+    [225,232,248],[218,225,242],[230,238,252],
+  ],
+  lava:[[180,40,0],[200,50,0],[160,30,0],[210,55,0],[185,42,0],[170,35,0],[195,48,0],[165,32,0],[205,52,0]],
+  tree:[[25,70,12],[35,88,22],[28,76,16],[38,92,25],[22,65,10],[32,82,18],[26,72,14],[36,90,24],[24,68,12]],
+  pine:[[14,52,4],[22,68,8],[18,60,6],[25,72,10],[12,48,3],[20,64,7],[16,56,5],[24,70,9],[13,50,4]],
+  burned:[[32,28,28],[42,38,38],[38,34,34],[45,40,40],[30,26,26],[40,36,36],[35,31,31],[44,39,39],[33,29,29]],
+  plague:[[32,48,10],[42,60,18],[38,55,14],[45,65,20],[30,44,8],[40,58,16],[35,52,12],[44,62,18],[33,50,11]],
 };
 
-function getTerrainColor(t,x,y){
-  const p=TBASE[t];
-  if(!p) return null;
-  const n=hash(x*7+y*13,x*3+y*17)&2;
-  return p[n];
+// Get dithered color for a pixel within a terrain block
+// tx,ty = pixel position within 3x3 block (0-2)
+function getDitherColor(type,x,y){
+  const pal=DITHER_PAL[type];
+  if(!pal) return null;
+  // Use position + hash for varied but stable pattern
+  const tx=(x/3|0)%3;
+  const ty=(y/3|0)%3;
+  const baseIdx=ty*3+tx;
+  // Add noise to break up regular grid pattern
+  const noiseIdx=(hash(x>>1,y>>1)&3);
+  const idx=(baseIdx+noiseIdx)%pal.length;
+  return pal[idx];
+}
+
+// Mountain volumetric - fake isometric height
+// Returns [r,g,b] with light/shadow based on position within mountain region
+function getMountainColor(x,y){
+  // Sample neighbors to determine slope direction
+  const isN=grid[y-3]&&grid[y-3][x]&&(grid[y-3][x].type==='mountain'||grid[y-3][x].type==='snow');
+  const isS=grid[y+3]&&grid[y+3][x]&&(grid[y+3][x].type==='mountain'||grid[y+3][x].type==='snow');
+  const isW=grid[y]&&grid[y][x-3]&&(grid[y][x-3].type==='mountain'||grid[y][x-3].type==='snow');
+  const isE=grid[y]&&grid[y][x+3]&&(grid[y][x+3].type==='mountain'||grid[y][x+3].type==='snow');
+
+  // Light comes from top-left
+  // Top face (exposed to north) = brightest
+  // Left face (exposed to west) = medium
+  // Right/bottom face = darkest (shadow)
+  let base=[128,128,145];
+  if(!isN&&isS){base=[175,178,198];} // top face - lit
+  else if(isN&&!isS){base=[90,90,108];}  // bottom shadow
+  else if(!isW&&isE){base=[155,158,178];} // left face - semi-lit
+  else if(isW&&!isE){base=[100,100,118];} // right shadow
+
+  // Dither within face
+  const tx=(x/3|0)%3, ty=(y/3|0)%3;
+  const n=(hash(x>>1,y>>1)&7)-4;
+  return[
+    Math.max(0,Math.min(255,base[0]+n)),
+    Math.max(0,Math.min(255,base[1]+n)),
+    Math.max(0,Math.min(255,base[2]+n))
+  ];
+}
+
+function getSnowColor(x,y){
+  // Snow on mountain peaks - bright with blue shadows
+  const tx=(x/3|0)%3,ty=(y/3|0)%3;
+  const pattern=[[235,242,255],[242,248,255],[228,236,252],[245,250,255],[232,240,255],[238,245,255],[225,234,250],[240,247,255],[235,242,255]];
+  const idx=(ty*3+tx)%pattern.length;
+  const n=(hash(x,y)&7)-4;
+  const c=pattern[idx];
+  return[Math.min(255,c[0]+n),Math.min(255,c[1]+n),Math.min(255,c[2]+n)];
 }
 
 function renderOverview(){
@@ -718,28 +801,66 @@ function buildTerrainCache(){
     terrainCache.width=W;terrainCache.height=H;
   }
   const tc=terrainCache.getContext('2d');
-  // Draw terrain via ImageData - fast pixel buffer write
-  const PS=3;
+  // Draw terrain via ImageData with dithering
   const img=tc.createImageData(W,H);
   const d=img.data;
-  // Fill background (ocean)
-  for(let i=0;i<d.length;i+=4){d[i]=13;d[i+1]=31;d[i+2]=53;d[i+3]=255;}
-  for(let y=0;y<H;y+=PS) for(let x=0;x<W;x+=PS){
-    const cell=grid[y]&&grid[y][x];
+  // Ocean background
+  for(let i=0;i<d.length;i+=4){d[i]=10;d[i+1]=28;d[i+2]=55;d[i+3]=255;}
+
+  // Draw pixel by pixel for dithering (every 1px, sample from grid at 3px resolution)
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    // Sample grid at 3px resolution
+    const gx=(Math.floor(x/3)*3);
+    const gy=(Math.floor(y/3)*3);
+    const cell=grid[gy]&&grid[gy][gx];
     if(!cell) continue;
     const t=cell.type;
-    if(t==='fire'||t==='lava') continue; // animated, drawn each frame
-    const col=getTerrainColor(t,x,y);
+    if(t==='fire'||t==='lava'||t==='water') continue;
+
+    let col;
+    if(t==='mountain') col=getMountainColor(x,y);
+    else if(t==='snow') col=getSnowColor(x,y);
+    else col=getDitherColor(t,x,y);
     if(!col) continue;
-    const v=(hash(x+y*7,y+x*3)&0xf)-8;
-    const r=Math.max(0,Math.min(255,col[0]+v));
-    const g=Math.max(0,Math.min(255,col[1]+v));
-    const b=Math.max(0,Math.min(255,col[2]+v));
-    for(let py=0;py<PS&&y+py<H;py++) for(let px=0;px<PS&&x+px<W;px++){
-      const idx=((y+py)*W+(x+px))*4;
-      d[idx]=r;d[idx+1]=g;d[idx+2]=b;d[idx+3]=255;
+
+    const idx=(y*W+x)*4;
+    d[idx]=col[0];d[idx+1]=col[1];d[idx+2]=col[2];d[idx+3]=255;
+  }
+
+  // Water: dithered two-tone with depth
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const gx=(Math.floor(x/3)*3),gy=(Math.floor(y/3)*3);
+    const cell=grid[gy]&&grid[gy][gx];
+    if(!cell||cell.type!=='water') continue;
+    const pal=DITHER_PAL.water;
+    const tx=(x/3|0)%3,ty=(y/3|0)%3;
+    const noiseIdx=(hash(x>>1,y>>1)&3);
+    const idx2=(ty*3+tx+noiseIdx)%pal.length;
+    const c=pal[idx2];
+    const idx=(y*W+x)*4;
+    d[idx]=c[0];d[idx+1]=c[1];d[idx+2]=c[2];d[idx+3]=255;
+  }
+
+  // Terrain borders: darken pixels at biome transitions for clarity
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const gx=Math.floor(x/3)*3,gy=Math.floor(y/3)*3;
+    const t=grid[gy]&&grid[gy][gx]?grid[gy][gx].type:'water';
+    if(t==='fire'||t==='lava') continue;
+    // Check neighbors (3px away)
+    const tn=grid[Math.max(0,gy-3)]&&grid[Math.max(0,gy-3)][gx]?grid[Math.max(0,gy-3)][gx].type:t;
+    const ts=grid[Math.min(H-1,gy+3)]&&grid[Math.min(H-1,gy+3)][gx]?grid[Math.min(H-1,gy+3)][gx].type:t;
+    const tw=grid[gy]&&grid[gy][Math.max(0,gx-3)]?grid[gy][Math.max(0,gx-3)].type:t;
+    const te=grid[gy]&&grid[gy][Math.min(W-1,gx+3)]?grid[gy][Math.min(W-1,gx+3)].type:t;
+    if(tn!==t||ts!==t||tw!==t||te!==t){
+      const idx=(y*W+x)*4;
+      if(d[idx+3]===255){
+        d[idx]=Math.max(0,d[idx]-20);
+        d[idx+1]=Math.max(0,d[idx+1]-20);
+        d[idx+2]=Math.max(0,d[idx+2]-20);
+      }
     }
   }
+
   tc.putImageData(img,0,0);
   // Draw sprites on top using sprite-specific context
   drawSpritesOnCtx(tc);
