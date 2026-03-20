@@ -1118,17 +1118,28 @@ const SPRITE_TOOLS=new Set(['house','tree','pine','ore','gold','crystal','cactus
 // One-shot tools: only fire once per touch/click
 const ONESHOT_TOOLS=new Set(['bomb','meteor','lightning','vil_red','vil_blue','vil_green','vil_gold']);
 let lastSpriteCell={x:-99,y:-99}; // prevent double-placing on same cell
+let lastPaintPos={x:-99,y:-99}; // for interpolation
 
 function placeSprite(cx,cy){
-  const sx=Math.floor(cx/10)*10;
-  const sy=Math.floor(cy/10)*10;
-  if(sx<0||sy<0||sx>=W||sy>=H) return;
-  if(sx===lastSpriteCell.x&&sy===lastSpriteCell.y) return;
-  lastSpriteCell={x:sx,y:sy};
-  const cell=grid[sy][sx];
-  if(!cell) return;
-  cell.type=curTool;cell.owner=null;
-  terrainDirty=true;spriteDirty=true;
+  // Interpolate from last position to current to fill gaps
+  const lx=lastPaintPos.x<0?cx:lastPaintPos.x;
+  const ly=lastPaintPos.y<0?cy:lastPaintPos.y;
+  const dist=Math.hypot(cx-lx,cy-ly);
+  const steps=Math.max(1,Math.ceil(dist/8));
+  for(let s=0;s<=steps;s++){
+    const ix=Math.round(lx+(cx-lx)*s/steps);
+    const iy=Math.round(ly+(cy-ly)*s/steps);
+    const sx=Math.floor(ix/10)*10;
+    const sy=Math.floor(iy/10)*10;
+    if(sx<0||sy<0||sx>=W||sy>=H) continue;
+    if(sx===lastSpriteCell.x&&sy===lastSpriteCell.y) continue;
+    lastSpriteCell={x:sx,y:sy};
+    const cell=grid[sy]&&grid[sy][sx];
+    if(!cell) continue;
+    cell.type=curTool;cell.owner=null;
+    terrainDirty=true;
+  }
+  lastPaintPos={x:cx,y:cy};
 }
 
 function applyTool(cx,cy,isFirst){
@@ -1137,18 +1148,13 @@ function applyTool(cx,cy,isFirst){
   // One-shot: only on first touch
   if(ONESHOT_TOOLS.has(curTool)){
     if(!isFirst) return;
-    if(curTool==='bomb') explode(cx,cy,Math.round(brushSz*4),false);
-    else if(curTool==='meteor') explode(cx,cy,Math.round(brushSz*6),true);
+    if(curTool==='bomb') explode(cx,cy,20,false);
+    else if(curTool==='meteor') explode(cx,cy,40,true);
     else if(curTool==='lightning'){
       grid[cy][cx].type='burned';
       bots=bots.filter(b=>!(b.x===cx&&b.y===cy));
     }
     else if(curTool.startsWith('vil_')){
-      // Check if cell is walkable land (not water)
-      const cell=grid[cy]&&grid[cy][cx];
-      const cellType=cell?cell.type:'water';
-      const isWater=cellType==='water'||cellType==='lava';
-      if(isWater&&!isLand(cx,cy)){logEvent('⛔ Только на суше!');return;}
       placeCastle(cx,cy,curTool.replace('vil_',''));
     }
     return;
@@ -1160,15 +1166,15 @@ function applyTool(cx,cy,isFirst){
     return;
   }
 
-  // Terrain brush tools: fill circle area
-  const r=Math.max(1,brushSz);
-  for(let dy=0-r;dy<=r;dy++) for(let dx=0-r;dx<=r;dx++){
+  // Terrain brush - radius in canvas pixels (bigger brush = bigger area)
+  const r=Math.round(brushSz*4); // 4px per brush unit
+  for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
     if(dx*dx+dy*dy>r*r) continue;
     const nx=cx+dx,ny=cy+dy;
     if(nx<0||ny<0||nx>=W||ny>=H) continue;
-    const cell=grid[ny][nx];
+    const cell=grid[ny]&&grid[ny][nx];
     if(!cell) continue;
-    if(curTool==='fire'){if(FLAMMABLE.has(cell.type)){cell.type='fire';fireCells.add(cy*W+cx);}}
+    if(curTool==='fire'){if(FLAMMABLE.has(cell.type)){cell.type='fire';fireCells.add(ny*W+nx);}}
     else if(curTool==='flood'){cell.type='water';}
     else if(curTool==='plague'){cell.type='plague';bots=bots.filter(b=>!(b.x===nx&&b.y===ny));}
     else cell.type=curTool;
@@ -1662,13 +1668,13 @@ wrap.addEventListener('touchmove',e=>{
 wrap.addEventListener('touchend',e=>{
   e.preventDefault();
   if(e.touches.length<2){isPinching=false;lastPinchDist=0;}
-  if(e.touches.length===0) isDrawing=false;
+  if(e.touches.length===0){isDrawing=false;lastPaintPos={x:-99,y:-99};}
 },{passive:false});
 
 // Mouse support (desktop testing)
 wrap.addEventListener('mousedown',e=>{
   if(isPanMode){panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;isDrawing=true;}
-  else{lastSpriteCell={x:-99,y:-99};isDrawing=true;paintAt(e.clientX,e.clientY,true);}
+  else{lastSpriteCell={x:-99,y:-99};lastPaintPos={x:-99,y:-99};isDrawing=true;paintAt(e.clientX,e.clientY,true);}
 });
 wrap.addEventListener('mousemove',e=>{
   if(!isDrawing) return;
@@ -1714,7 +1720,13 @@ function renderTools(){
     box.appendChild(el);
   });
 }
-function swTab(i){curTab=i;curTool=TABS[i][0].id;document.querySelectorAll('.tab').forEach((el,j)=>el.classList.toggle('active',j===i));renderTools();}
+function swTab(i){
+  curTab=i;curTool=TABS[i][0].id;
+  document.querySelectorAll('.tab').forEach((el,j)=>el.classList.toggle('active',j===i));
+  // Show brush only for Terrain tab (index 0)
+  document.getElementById('brush-row').style.display=i===0?'flex':'none';
+  renderTools();
+}
 function showHint(txt){const h=document.getElementById('hint');h.textContent=txt;h.style.opacity='1';clearTimeout(h._t);h._t=setTimeout(()=>h.style.opacity='0',1500);}
 
 document.getElementById('bsl').addEventListener('input',function(){brushSz=parseInt(this.value);document.getElementById('bval').textContent=brushSz;});
