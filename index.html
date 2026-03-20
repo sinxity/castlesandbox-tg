@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Castle Sandbox</title>
+<title>Castle Sandbox v1.2</title>
 <script>
 window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:function(){},setBackgroundColor:function(){}}};
 </script>
@@ -67,7 +67,7 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
   <div id="cw">
     <canvas id="gc"></canvas>
     <div id="loading">
-      <div id="loading-title">🏰 Castle Sandbox</div>
+      <div id="loading-title">🏰 Castle Sandbox <span style="font-size:11px;opacity:0.6">v1.2</span></div>
       <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
       <div id="loading-pct">Генерируем мир... 0%</div>
     </div>
@@ -76,6 +76,7 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
         <button class="tbtn" onclick="resetWorld()">🌍 Новый</button>
         <button class="tbtn" onclick="loadEurope()">🗺 Европа</button>
         <button class="tbtn" id="pan-btn" title="Режим перемещения">🖐</button>
+        <div class="tbtn" style="cursor:default;opacity:0.6;font-size:9px">v1.2</div>
       </div>
       <div id="stats">
         🔴<b id="sr">0</b> 🔵<b id="sbl">0</b> 🟢<b id="sg">0</b> 🟡<b id="sy">0</b><br>
@@ -939,11 +940,7 @@ function render(){
       ctx.fillStyle=(tick*2+x+y)%6<3?'#cc3300':'#ff5500';
       ctx.fillRect(x,y,PS,PS);
     }
-    // Water shimmer (subtle, 6px blocks, only near surface)
-    if(t==='water'&&tick%8===0&&Math.sin(tick*0.1+x*0.05+y*0.03)>0.85){
-      ctx.fillStyle='rgba(180,230,255,0.08)';
-      ctx.fillRect(x,y,6,2);
-    }
+
   }
 
   // Territory + entities
