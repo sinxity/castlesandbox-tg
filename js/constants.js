@@ -27,7 +27,13 @@ function getMtn(nx,ny,W){
 function getFst(nx,ny,W){
   let mx=0;
   for(const f of FORESTS){
-    const d=Math.hypot((nx-f.c[0])*W,(ny-f.c[1])*W);
+    // Domain warp: displace sample with multi-scale noise for organic edges
+    const r=f.r;
+    const wx=(noise(nx*12+f.c[0]*77,ny*12+f.c[1]*77)-0.5)*r*1.1;
+    const wy=(noise(ny*12+f.c[0]*77+33,nx*12+f.c[1]*77+33)-0.5)*r*1.1;
+    const wx2=(noise(nx*28+f.c[0]*133,ny*28+f.c[1]*133)-0.5)*r*0.45;
+    const wy2=(noise(ny*28+f.c[1]*133+7,nx*28+f.c[0]*133+7)-0.5)*r*0.45;
+    const d=Math.hypot((nx+wx+wx2-f.c[0])*W,(ny+wy+wy2-f.c[1])*W);
     const s=Math.max(0,1-d/(f.r*W));if(s>mx)mx=s;
   }
   return mx;
@@ -35,7 +41,12 @@ function getFst(nx,ny,W){
 function getHill(nx,ny){
   let mx=0;
   for(const h of HILLS){
-    const d=Math.hypot(nx-h.c[0],ny-h.c[1]);
+    const r=h.r;
+    const wx=(noise(nx*10+h.c[0]*88,ny*10+h.c[1]*88)-0.5)*r*1.0;
+    const wy=(noise(ny*10+h.c[0]*88+22,nx*10+h.c[1]*88+22)-0.5)*r*1.0;
+    const wx2=(noise(nx*24+h.c[0]*155,ny*24+h.c[1]*155)-0.5)*r*0.4;
+    const wy2=(noise(ny*24+h.c[1]*155+9,nx*24+h.c[0]*155+9)-0.5)*r*0.4;
+    const d=Math.hypot(nx+wx+wx2-h.c[0],ny+wy+wy2-h.c[1]);
     const s=Math.max(0,1-d/h.r);if(s>mx)mx=s;
   }
   return mx;
@@ -43,7 +54,10 @@ function getHill(nx,ny){
 function getDesert(nx,ny){
   let mx=0;
   for(const d of DESERTS){
-    const dist=Math.hypot(nx-d.c[0],ny-d.c[1]);
+    const r=d.r;
+    const wx=(noise(nx*9+d.c[0]*66,ny*9+d.c[1]*66)-0.5)*r*0.9;
+    const wy=(noise(ny*9+d.c[0]*66+15,nx*9+d.c[1]*66+15)-0.5)*r*0.9;
+    const dist=Math.hypot(nx+wx-d.c[0],ny+wy-d.c[1]);
     const s=Math.max(0,1-dist/d.r);if(s>mx)mx=s;
   }
   return mx;

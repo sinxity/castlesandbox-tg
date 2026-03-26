@@ -436,27 +436,43 @@ function getDitherColor(type,x,y){
 }
 
 function getMountainColor(x,y){
-  const isN=grid[y-3]&&grid[y-3][x]&&(grid[y-3][x].type==='mountain'||grid[y-3][x].type==='snow');
-  const isS=grid[y+3]&&grid[y+3][x]&&(grid[y+3][x].type==='mountain'||grid[y+3][x].type==='snow');
-  const isW=grid[y]&&grid[y][x-3]&&(grid[y][x-3].type==='mountain'||grid[y][x-3].type==='snow');
-  const isE=grid[y]&&grid[y][x+3]&&(grid[y][x+3].type==='mountain'||grid[y][x+3].type==='snow');
-  let base=[128,128,145];
-  if(!isN&&isS){base=[192,195,215];}      // top face — bright
-  else if(isN&&!isS){base=[72,72,90];}    // bottom face — deep shadow
-  else if(!isW&&isE){base=[162,165,185];} // left face — medium
-  else if(isW&&!isE){base=[92,92,110];}   // right face — shadow
-  // Cracks: occasional very dark pixels for jagged look
-  const crack=(hash(x*3+7,y*3+11)&63)<3;
-  if(crack) return[Math.max(0,base[0]-45),Math.max(0,base[1]-45),Math.max(0,base[2]-40)];
-  // Bright fleck for rocky highlights
-  const fleck=(hash(x*5+3,y*5+9)&127)<2;
-  if(fleck) return[Math.min(255,base[0]+50),Math.min(255,base[1]+50),Math.min(255,base[2]+45)];
-  const n=(hash(x>>1,y>>1)&15)-8;
+  function isMtn(px,py){const c=grid[py]&&grid[py][px];return c&&(c.type==='mountain'||c.type==='snow');}
+  const N3=isMtn(x,y-3),S3=isMtn(x,y+3),W3=isMtn(x-3,y),E3=isMtn(x+3,y);
+  const N6=isMtn(x,y-6),S6=isMtn(x,y+6),W6=isMtn(x-6,y),E6=isMtn(x+6,y);
+  const NW=isMtn(x-2,y-2),NE=isMtn(x+2,y-2),SW=isMtn(x-2,y+2),SE=isMtn(x+2,y+2);
+  // Count how many neighbors are mountain → low count = ridge, high count = valley
+  const cnt=[N3,S3,W3,E3,NW,NE,SW,SE].filter(Boolean).length;
+  const isRidge=cnt<=1;
+  // Directional shading: light from NW
+  let base;
+  if(!N3&&!N6&&S3){base=[208,212,232];}        // north face — fully lit
+  else if(N3&&!S3&&!S6){base=[58,58,76];}       // south face — deep shadow
+  else if(!W3&&!W6&&E3){base=[172,176,196];}    // west face — half lit
+  else if(W3&&!E3&&!E6){base=[78,78,98];}       // east face — shadow
+  else if(!NW&&SE){base=[185,188,208];}          // diagonal lit
+  else if(NW&&!SE){base=[90,90,110];}            // diagonal shadow
+  else{base=[128,130,150];}                      // flat mid-ground
+  // Ridge highlight
+  if(isRidge){base=[Math.min(255,base[0]+42),Math.min(255,base[1]+42),Math.min(255,base[2]+38)];}
+  // Multi-scale fractal noise
+  const n1=(hash(x,y)&15)-8;
   const n2=(hash(x*2+1,y*2+3)&7)-4;
+  const n3=(hash(x>>2,y>>2)&7)-4; // large-scale variation across mountain range
+  // Erosion streaks: natural diagonal dark channels
+  const erosionA=(hash(x*3+y*5+13,y*3+x*2+7)&31)<2;
+  const erosionB=((x-y*2)&7)===0&&(hash(x>>1,y>>1)&15)<3;
+  if(erosionA||erosionB) return[
+    Math.max(0,base[0]+n1-52),Math.max(0,base[1]+n1-52),Math.max(0,base[2]+n1-48)];
+  // Sharp cracks (jagged silhouette)
+  const crack=(hash(x*3+7,y*3+11)&63)<2;
+  if(crack) return[Math.max(0,base[0]-55),Math.max(0,base[1]-55),Math.max(0,base[2]-50)];
+  // Rock highlight flecks
+  const fleck=(hash(x*5+3,y*5+9)&127)<2;
+  if(fleck) return[Math.min(255,base[0]+60),Math.min(255,base[1]+60),Math.min(255,base[2]+55)];
   return[
-    Math.max(0,Math.min(255,base[0]+n+n2)),
-    Math.max(0,Math.min(255,base[1]+n+n2)),
-    Math.max(0,Math.min(255,base[2]+n+n2))
+    Math.max(0,Math.min(255,base[0]+n1+n2+n3)),
+    Math.max(0,Math.min(255,base[1]+n1+n2+n3)),
+    Math.max(0,Math.min(255,base[2]+n1+n2+n3))
   ];
 }
 

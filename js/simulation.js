@@ -221,9 +221,9 @@ function updateCastles(){
         }
       }
     }
-    if(c.craftTimer%80!==0) return;
-    if(r.wood>=3&&r.iron>=2){r.wood-=3;r.iron-=2;r.swords++;logEvent('⚔️ '+c.team+' скрафтил меч!');}
-    if(r.stone>=4&&r.iron>=2){r.stone-=4;r.iron-=2;r.armor++;logEvent('🛡 '+c.team+' скрафтил броню!');}
+    if(c.craftTimer%25!==0) return;
+    if(r.wood>=2&&r.iron>=1){r.wood-=2;r.iron-=1;r.swords++;logEvent('⚔️ '+c.team+' скрафтил меч!');}
+    if(r.stone>=2&&r.iron>=1){r.stone-=2;r.iron-=1;r.armor++;logEvent('🛡 '+c.team+' скрафтил броню!');}
     if((c.level||1)>=3&&r.swords>=1&&r.armor>=1){
       r.swords--;r.armor--;r.knights++;
       const worker=bots.find(b=>b.team===c.team&&!b.isKnight);
@@ -256,10 +256,10 @@ function updateCastles(){
       // Decide what to build based on need and level
       let buildType=null;
       if(lv>=2&&farmCount<2&&rb.wood>=1) buildType='farm';
-      else if(lv>=3&&smithyCount<1&&rb.stone>=2) buildType='smithy';
-      else if(lv>=3&&barracksCount<1&&rb.stone>=2&&rb.wood>=1) buildType='barracks';
-      else if(lv>=4&&marketCount<1&&rb.wood>=2) buildType='market';
-      else if(lv>=3&&towerCount<lv&&rb.stone>=2) buildType='tower';
+      else if(lv>=3&&smithyCount<1&&rb.stone>=1) buildType='smithy';
+      else if(lv>=3&&barracksCount<1&&rb.stone>=1) buildType='barracks';
+      else if(lv>=4&&marketCount<1&&rb.wood>=1) buildType='market';
+      else if(lv>=3&&towerCount<lv&&rb.stone>=1) buildType='tower';
       else if(rb.stone>=1) buildType='wall';
       else if(rb.wood>=1) buildType='house';
       if(buildType){

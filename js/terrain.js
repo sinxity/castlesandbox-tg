@@ -2,10 +2,11 @@
 function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
-  // Screen size = canvas size, no DPR scaling (fixes stretch bug)
-  // Map is 4x screen size - large world
-  W=Math.floor(wrap.clientWidth*4);
-  H=Math.floor(wrap.clientHeight*4);
+  // Landscape rectangle map: use the longer screen dimension as the map width
+  // so the world is wider than tall (like a real map)
+  const dim=Math.max(wrap.clientWidth,wrap.clientHeight);
+  W=Math.floor(dim*4);
+  H=Math.floor(dim*3);
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
@@ -77,10 +78,23 @@ function buildMapCache(){
     const n=noise(nx*35,ny*35)*0.5+noise(nx*70,ny*70)*0.3+noise(nx*140,ny*140)*0.2;
     let r,g2,b;
     if(!land){
-      const n1=isLand(x-1,y)||isLand(x+1,y)||isLand(x,y-1)||isLand(x,y+1);
-      const n2=!n1&&(isLand(x-3,y)||isLand(x+3,y)||isLand(x,y-3)||isLand(x,y+3));
-      if(n1){r=24;g2=95;b=170;}else if(n2){r=18;g2=75;b=148;}else{r=13;g2=45;b=95;}
-      const v=Math.floor(n*6-3);r+=v;g2+=v;b+=v;
+      // Noise-displaced coast check for organic shallow water gradient
+      const nd=noise(nx*16,ny*16)*3-1.5; // -1.5 to 1.5 displacement
+      const nd2=noise(ny*22+0.5,nx*22+0.3)*2-1;
+      function nearLand(d){
+        return isLand(x-d,y)||isLand(x+d,y)||isLand(x,y-d)||isLand(x,y+d)||
+               isLand(x-d,y-d)||isLand(x+d,y+d)||isLand(x-d,y+d)||isLand(x+d,y-d);
+      }
+      const n1=nearLand(1)||nearLand(Math.round(1+nd));
+      const n2=!n1&&(nearLand(3)||nearLand(Math.round(3+nd)));
+      const n3=!n2&&!n1&&(nearLand(6)||nearLand(Math.round(5+nd2)));
+      const n4=!n3&&!n2&&!n1&&(nearLand(10)||nearLand(Math.round(9+nd2)));
+      if(n1){r=35;g2=110;b=185;}
+      else if(n2){r=24;g2=90;b=165;}
+      else if(n3){r=18;g2=72;b=148;}
+      else if(n4){r=15;g2=55;b=120;}
+      else{r=13;g2=42;b=92;}
+      const v=Math.floor(n*8-4);r=Math.max(0,Math.min(255,r+v));g2=Math.max(0,Math.min(255,g2+v));b=Math.max(0,Math.min(255,b+v));
     } else {
       const ms=getMtn(nx,ny,W);
       const fs=getFst(nx,ny,W);
