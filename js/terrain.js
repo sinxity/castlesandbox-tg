@@ -183,18 +183,47 @@ function computeTerritory(c){
 }
 
 function rebuildTerritories(){
+  // Multi-source Voronoi BFS — territories never overlap, each cell goes to nearest castle
+  const owner=new Int16Array(W*H).fill(-1);
+  const distArr=new Uint16Array(W*H).fill(65535);
+  const queue=[];let qi=0;
+  castles.forEach((c,ci)=>{
+    const sx=Math.round(c.nx*W),sy=Math.round(c.ny*H);
+    if(sx<0||sy<0||sx>=W||sy>=H) return;
+    owner[sy*W+sx]=ci;distArr[sy*W+sx]=0;
+    queue.push(sx,sy,ci,0);
+  });
+  const maxDs=castles.map(c=>Math.round(c.radius*Math.min(W,H)/100));
+  while(qi<queue.length){
+    const x=queue[qi++],y=queue[qi++],ci=queue[qi++],d=queue[qi++];
+    if(d>=maxDs[ci]) continue;
+    for(const[dx,dy] of D4){
+      const nx2=x+dx,ny2=y+dy;
+      if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+      const k=ny2*W+nx2;
+      const nd=d+1;
+      if(nd>=distArr[k]) continue;
+      const ct=grid[ny2]&&grid[ny2][nx2]?grid[ny2][nx2].type:'water';
+      if(!isLand(nx2,ny2)||ct==='water'||ct==='lava') continue;
+      distArr[k]=nd;owner[k]=ci;
+      queue.push(nx2,ny2,ci,nd);
+    }
+  }
+  // Assign cells
+  castles.forEach(c=>c.cells=[]);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const ci=owner[y*W+x];
+    if(ci>=0) castles[ci].cells.push(x,y);
+  }
+  // Draw
   terrCtx.clearRect(0,0,W,H);
   castles.forEach(c=>{
     if(!c.cells||c.cells.length<2) return;
     const col=TCRGB[c.team]||'128,128,128';
     const cellSet=new Set();
     for(let i=0;i<c.cells.length;i+=2) cellSet.add(c.cells[i+1]*W+c.cells[i]);
-    // Draw filled territory
     terrCtx.fillStyle=`rgba(${col},0.15)`;
-    for(let i=0;i<c.cells.length;i+=2){
-      terrCtx.fillRect(c.cells[i],c.cells[i+1],2,2);
-    }
-    // Draw border on top
+    for(let i=0;i<c.cells.length;i+=2) terrCtx.fillRect(c.cells[i],c.cells[i+1],2,2);
     terrCtx.fillStyle=`rgba(${col},0.9)`;
     for(let i=0;i<c.cells.length;i+=2){
       const x=c.cells[i],y=c.cells[i+1];

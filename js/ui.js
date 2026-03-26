@@ -459,6 +459,46 @@ function loadGame(){
   }catch(e){showHint('❌ Ошибка загрузки');}
 }
 
+// ── WAR DECLARATION ───────────────────────────────────────────
+function declareWarAll(){
+  if(!castles.length){showHint('Нет замков на карте');return;}
+  let warCount=0;
+  castles.forEach(c=>{
+    if(defeated.find(d=>d.castle===c)) return;
+    // Find nearest enemy castle
+    let enemy=null,bestD=Infinity;
+    castles.forEach(ec=>{
+      if(ec.team===c.team||defeated.find(d=>d.castle===ec)) return;
+      const d=Math.hypot(ec.nx-c.nx,ec.ny-c.ny);
+      if(d<bestD){bestD=d;enemy=ec;}
+    });
+    if(!enemy) return;
+    // Already has active raid → reinforce
+    const existingRaid=raids.find(r=>r.team===c.team);
+    const myKnights=bots.filter(b=>b.team===c.team&&b.isKnight);
+    if(!existingRaid&&myKnights.length>=3){
+      raids.push({team:c.team,knights:myKnights.slice(0,Math.min(myKnights.length,20)),
+        tx:Math.round(enemy.nx*W),ty:Math.round(enemy.ny*H),
+        targetTeam:enemy.team,phase:'march',loot:0,battleTimer:0});
+      RES[c.team].knights=0;
+      logEvent('⚔️ '+c.team+' — в поход!');
+      warCount++;
+    }
+    // Always send an army wave
+    armies.push({team:c.team,x:c.nx,y:c.ny,tx:enemy.nx,ty:enemy.ny,
+      targetTeam:enemy.team,hp:25+Math.round(c.power*0.3),maxhp:50});
+    warCount++;
+  });
+  if(warCount>0){
+    showHint('⚔️ ВОЙНА! Все фракции атакуют!');
+    playSound('explode');
+    if(navigator.vibrate) navigator.vibrate([80,40,80]);
+    logEvent('🔔 Война объявлена всем!');
+  } else {
+    showHint('Нет войск для атаки');
+  }
+}
+
 // ── WORLD ACTIONS ─────────────────────────────────────────────
 function resetWorld(){
   cancelAnimationFrame(rafId);

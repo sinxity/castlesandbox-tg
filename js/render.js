@@ -236,16 +236,50 @@ function drawArmy(a){
 }
 
 function drawBot(b){
-  const tc=TC[b.team]||'#fff';
-  const sz=b.isKnight?5:3;
-  ctx.fillStyle=b.isKnight?tc:'rgba(255,255,255,0.5)';
-  ctx.fillRect(b.x-Math.floor(sz/2),b.y-Math.floor(sz/2),sz,sz);
+  const tc=TC[b.team]||'#888';
+  const px=Math.round(b.x),py=Math.round(b.y);
   if(b.isKnight){
-    ctx.fillStyle=tc;ctx.fillRect(b.x-2,b.y-2,5,5);
-    ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fillRect(b.x-1,b.y-1,3,3);
-    ctx.fillStyle=tc;ctx.fillRect(b.x,b.y,1,1);
+    // Knight — armoured pixel figure ~7x10px
+    const cx=px-3,cy=py-9;
+    ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(cx+1,py,6,2); // shadow
+    // Helmet
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy,5,4);
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(cx+2,cy+1,3,2); // visor
+    ctx.fillStyle='rgba(255,255,255,0.35)';ctx.fillRect(cx+1,cy,2,1); // shine
+    // Neck
+    ctx.fillStyle='#c09070';ctx.fillRect(cx+2,cy+4,3,1);
+    // Armour body
+    ctx.fillStyle=tc;ctx.fillRect(cx,cy+5,7,4);
+    ctx.fillStyle='rgba(255,255,255,0.22)';ctx.fillRect(cx,cy+5,2,4);
+    ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(cx+5,cy+5,2,4);
+    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(cx+3,cy+5,1,4); // breastplate line
+    // Sword
+    ctx.fillStyle='#bbbccc';ctx.fillRect(cx+7,cy+3,1,6);
+    ctx.fillStyle='#888899';ctx.fillRect(cx+6,cy+4,2,1);
+    // Legs
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(cx+1,cy+9,2,3);ctx.fillRect(cx+4,cy+9,2,3);
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy+9,1,3);ctx.fillRect(cx+4,cy+9,1,3);
+    // HP bar
+    if(b.hp<b.maxhp){
+      ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx,cy-3,7,2);
+      ctx.fillStyle='#e44';ctx.fillRect(cx,cy-3,Math.round(7*b.hp/b.maxhp),2);
+    }
   } else {
-    ctx.fillStyle=tc;ctx.fillRect(b.x-1,b.y-1,3,3);
+    // Settler / worker — small villager ~5x9px
+    const cx=px-2,cy=py-8;
+    ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fillRect(cx,py,5,2); // shadow
+    // Head (skin)
+    ctx.fillStyle='#e0b882';ctx.fillRect(cx+1,cy,3,3);
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy,3,1); // hair in team color
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx+1,cy+1,1,1);ctx.fillRect(cx+3,cy+1,1,1); // eyes
+    // Body (shirt in team color)
+    ctx.fillStyle=tc;ctx.fillRect(cx,cy+3,5,4);
+    ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(cx,cy+3,2,4);
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(cx+4,cy+3,1,4);
+    // Arms (skin)
+    ctx.fillStyle='#e0b882';ctx.fillRect(cx-1,cy+3,1,2);ctx.fillRect(cx+5,cy+3,1,2);
+    // Legs / pants
+    ctx.fillStyle='#4a3828';ctx.fillRect(cx+1,cy+7,1,3);ctx.fillRect(cx+3,cy+7,1,3);
   }
 }
 
