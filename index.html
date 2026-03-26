@@ -21,26 +21,19 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
       <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
       <div id="loading-pct">Генерируем мир... 0%</div>
     </div>
+
     <div id="topbar">
       <div id="map-btns">
-        <button class="tbtn" onclick="resetWorld()">🌍 Новый</button>
-        <button class="tbtn" onclick="loadEurope()">🗺 Европа</button>
-        <button class="tbtn" id="pan-btn" title="Режим перемещения">🖐</button>
-        <button class="tbtn" id="speed-btn" onclick="cycleSpeed()" title="Скорость игры">▶️</button>
+        <button class="tbtn" onclick="resetWorld()" title="Новый мир">🌍</button>
+        <button class="tbtn" onclick="loadEurope()" title="Карта Европы">🗺</button>
+        <button class="tbtn" id="speed-btn" onclick="cycleSpeed()" title="Скорость">▶️</button>
         <button class="tbtn" onclick="saveGame()" title="Сохранить">💾</button>
         <button class="tbtn" onclick="loadGame()" title="Загрузить">📂</button>
       </div>
       <div id="stats">
         🔴<b id="sr">0</b> 🔵<b id="sbl">0</b> 🟢<b id="sg">0</b> 🟡<b id="sy">0</b><br>
         🪵<b id="res-wood">0</b> 🪨<b id="res-stone">0</b> ⚙️<b id="res-iron">0</b><br>
-        ⚔️<b id="res-knights">0</b>/10 🌙<b id="day-time">День</b><br>
-        🗓<b id="day-count">0</b> <b id="weather-icon">☀️</b>
-        <div id="faction-row">
-          <div class="fbtn" data-team="red" style="background:#e74c3c" onclick="setPlayerTeam('red')" title="Красные">🔴</div>
-          <div class="fbtn" data-team="blue" style="background:#3498db" onclick="setPlayerTeam('blue')" title="Синие">🔵</div>
-          <div class="fbtn" data-team="green" style="background:#2ecc71" onclick="setPlayerTeam('green')" title="Зелёные">🟢</div>
-          <div class="fbtn" data-team="gold" style="background:#f1c40f" onclick="setPlayerTeam('gold')" title="Золотые">🟡</div>
-        </div>
+        ⚔️<b id="res-knights">0</b>/10 🌙<b id="day-time">День</b>
       </div>
     </div>
 
@@ -58,14 +51,26 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
       <button onclick="resetWorld()">🌍 Новая игра</button>
     </div>
   </div>
+
   <div id="bot">
+    <!-- Faction selector + day/weather — lives outside #cw, no touch interference -->
+    <div id="faction-bar">
+      <b id="weather-icon">☀️</b>
+      <span>🗓<b id="day-count">0</b></span>
+      <span style="flex:1"></span>
+      <span class="flabel">Фракция:</span>
+      <div class="fbtn" data-team="red" style="background:#e74c3c" onclick="setPlayerTeam('red')" title="Красные">🔴</div>
+      <div class="fbtn" data-team="blue" style="background:#3498db" onclick="setPlayerTeam('blue')" title="Синие">🔵</div>
+      <div class="fbtn" data-team="green" style="background:#2ecc71" onclick="setPlayerTeam('green')" title="Зелёные">🟢</div>
+      <div class="fbtn" data-team="gold" style="background:#f1c40f" onclick="setPlayerTeam('gold')" title="Золотые">🟡</div>
+    </div>
     <div class="tabs">
       <div class="tab active" onclick="swTab(0)">Terrain</div>
       <div class="tab" onclick="swTab(1)">Природа</div>
       <div class="tab" onclick="swTab(2)">Оружие</div>
       <div class="tab" onclick="swTab(3)">Поселение</div>
     </div>
-    <div id="brush-row">
+    <div id="brush-row" style="display:none">
       <span class="brl">Кисть</span>
       <input type="range" id="bsl" min="1" max="15" value="4" step="1">
       <span id="bval">4</span>
@@ -75,17 +80,13 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
 </div>
 
 <script>
-// Telegram WebApp init
 if(window.Telegram&&window.Telegram.WebApp){
   const tg=window.Telegram.WebApp;
-  tg.ready();
-  tg.expand();
+  tg.ready();tg.expand();
   tg.setHeaderColor('#0d1f35');
   tg.setBackgroundColor('#0d1f35');
 }
 </script>
-
-<!-- Load order matters: each file depends on the previous ones -->
 <script src="js/geodata.js"></script>
 <script src="js/constants.js"></script>
 <script src="js/state.js"></script>

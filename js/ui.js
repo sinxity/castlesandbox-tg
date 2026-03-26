@@ -11,7 +11,6 @@ function playSound(type){
   if(!soundEnabled||!audioCtx) return;
   try{
     const now=audioCtx.currentTime;
-    // Multi-note sounds
     if(type==='victory'||type==='level'){
       const freqs=type==='victory'?[523,659,784,1047]:[440,550,660];
       freqs.forEach((f,i)=>{
@@ -74,9 +73,7 @@ function updateStats(){
 let lastT=0;
 function loop(ts){
   rafId=requestAnimationFrame(loop);
-  // Smooth zoom always
   if(Math.abs(camZ-targetZ)>0.001){camZ+=(targetZ-camZ)*0.15;clampCam();}
-  // Speed: 0=pause (render only), 1=normal 60ms, 2=fast 30ms
   const frameSkip=gameSpeed===2?30:60;
   if(gameSpeed===0||ts-lastT<frameSkip){render();applyTransform();return;}
   lastT=ts;tick++;
@@ -88,7 +85,6 @@ function loop(ts){
   if(tick%60===0) updateWeather();
   if(tick%30===0) updateCastles();
   if(tick%600===0&&tick>0) spawnZombieWave();
-  // Day counter: one full cycle = 1/daySpeed ticks
   const dayTicks=Math.round(1/daySpeed);
   if(tick>0&&tick%dayTicks===0) dayCount++;
   if(tick%20===0) updateStats();
@@ -100,15 +96,11 @@ function loop(ts){
 function getTouchDist(t){return Math.hypot(t[1].clientX-t[0].clientX,t[1].clientY-t[0].clientY);}
 function getTouchMid(t){return{x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2};}
 
-function setupEvents(){
-  const panBtn=document.getElementById('pan-btn');
-  panBtn.addEventListener('click',()=>{
-    isPanMode=!isPanMode;
-    panBtn.style.background=isPanMode?'rgba(55,138,221,0.5)':'rgba(10,20,35,0.82)';
-    panBtn.textContent=isPanMode?'✋':'🖐';
-  });
+// UI elements inside #cw that should NOT be intercepted by the canvas touch handler
+function isUITouch(e){return!!e.target.closest('#topbar,#minimap-wrap,#victory-overlay,#loading');}
 
-  // Mini-map click: navigate to clicked position
+function setupEvents(){
+  // Mini-map click to navigate
   const mmWrap=document.getElementById('minimap-wrap');
   if(mmWrap) mmWrap.addEventListener('click',e=>{
     const mmEl=document.getElementById('minimap');
@@ -122,6 +114,9 @@ function setupEvents(){
   });
 
   wrap.addEventListener('touchstart',e=>{
+    // CRITICAL FIX: don't intercept touches on topbar buttons or minimap
+    // e.preventDefault() kills synthetic click events, breaking buttons
+    if(isUITouch(e)) return;
     e.preventDefault();
     initAudio();
     if(e.touches.length===2){
@@ -134,7 +129,8 @@ function setupEvents(){
       panStartCamX=camX;panStartCamY=camY;
     } else if(e.touches.length===1&&!isPinching){
       const t=e.touches[0];
-      if(isPanMode){
+      if(curTool===null){
+        // Pan mode (default — no tool selected)
         panStartX=t.clientX;panStartY=t.clientY;
         panStartCamX=camX;panStartCamY=camY;
       } else {
@@ -146,6 +142,7 @@ function setupEvents(){
   },{passive:false});
 
   wrap.addEventListener('touchmove',e=>{
+    if(isUITouch(e)) return;
     e.preventDefault();
     if(e.touches.length===2&&isPinching){
       const dist=getTouchDist(e.touches);
@@ -167,7 +164,7 @@ function setupEvents(){
       clampCam();showZoomIndicator();
     } else if(e.touches.length===1){
       const t=e.touches[0];
-      if(isPanMode){
+      if(curTool===null){
         camX=panStartCamX+(t.clientX-panStartX)*-1;
         camY=panStartCamY+(t.clientY-panStartY)*-1;
         clampCam();
@@ -178,6 +175,7 @@ function setupEvents(){
   },{passive:false});
 
   wrap.addEventListener('touchend',e=>{
+    if(isUITouch(e)) return;
     e.preventDefault();
     if(e.touches.length<2){isPinching=false;lastPinchDist=0;}
     if(e.touches.length===0){isDrawing=false;lastPaintPos={x:-99,y:-99};}
@@ -185,16 +183,26 @@ function setupEvents(){
 
   wrap.addEventListener('mousedown',e=>{
     initAudio();
-    if(isPanMode){panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;isDrawing=true;}
-    else{lastSpriteCell={x:-99,y:-99};lastPaintPos={x:-99,y:-99};isDrawing=true;paintAt(e.clientX,e.clientY,true);}
+    if(curTool===null){
+      panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;
+      isDrawing=true;
+    } else {
+      lastSpriteCell={x:-99,y:-99};lastPaintPos={x:-99,y:-99};
+      isDrawing=true;paintAt(e.clientX,e.clientY,true);
+    }
   });
   wrap.addEventListener('mousemove',e=>{
     if(!isDrawing) return;
-    if(isPanMode){camX=panStartCamX-(e.clientX-panStartX);camY=panStartCamY-(e.clientY-panStartY);clampCam();}
-    else paintAt(e.clientX,e.clientY,false);
+    if(curTool===null){
+      camX=panStartCamX-(e.clientX-panStartX);
+      camY=panStartCamY-(e.clientY-panStartY);
+      clampCam();
+    } else {
+      paintAt(e.clientX,e.clientY,false);
+    }
   });
-  wrap.addEventListener('mouseup',()=>isDrawing=false);
-  wrap.addEventListener('mouseleave',()=>isDrawing=false);
+  wrap.addEventListener('mouseup',()=>{isDrawing=false;});
+  wrap.addEventListener('mouseleave',()=>{isDrawing=false;});
   wrap.addEventListener('wheel',e=>{
     e.preventDefault();
     const delta=e.deltaY>0?0.9:1.1;
@@ -220,6 +228,12 @@ function getToolIcon(id){
   return icons[id]||'❓';
 }
 
+function updateBrushVisibility(){
+  // Show brush slider only for brush-type terrain tools (not sprites/oneshots)
+  const isBrush=curTool&&!SPRITE_TOOLS.has(curTool)&&!ONESHOT_TOOLS.has(curTool)&&!curTool.startsWith('vil_');
+  document.getElementById('brush-row').style.display=isBrush?'flex':'none';
+}
+
 function renderTools(){
   const box=document.getElementById('tbx');box.innerHTML='';
   TABS[curTab].forEach(t=>{
@@ -227,17 +241,25 @@ function renderTools(){
     el.className='tl'+(curTool===t.id?' active':'');
     const icon=getToolIcon(t.id);
     el.innerHTML=`<div class="td" style="background:${t.color};display:flex;align-items:center;justify-content:center;font-size:13px">${icon}</div><span class="tn">${t.label}</span>`;
-    el.addEventListener('touchstart',ev=>{ev.stopPropagation();curTool=t.id;renderTools();},{passive:true});
-    el.addEventListener('click',()=>{curTool=t.id;renderTools();});
+    const selectTool=()=>{
+      // Tap active tool again → deselect (back to pan/hand mode)
+      curTool=curTool===t.id?null:t.id;
+      renderTools();
+      updateBrushVisibility();
+    };
+    // stopPropagation prevents the wrap touchstart from also firing
+    el.addEventListener('touchstart',ev=>{ev.stopPropagation();selectTool();},{passive:true});
+    el.addEventListener('click',selectTool);
     box.appendChild(el);
   });
 }
 
 function swTab(i){
-  curTab=i;curTool=TABS[i][0].id;
+  curTab=i;
+  curTool=null; // switching tabs returns to pan mode — user picks a tool explicitly
   document.querySelectorAll('.tab').forEach((el,j)=>el.classList.toggle('active',j===i));
-  document.getElementById('brush-row').style.display=i===0?'flex':'none';
   renderTools();
+  updateBrushVisibility();
 }
 
 function showHint(txt){const h=document.getElementById('hint');h.textContent=txt;h.style.opacity='1';clearTimeout(h._t);h._t=setTimeout(()=>h.style.opacity='0',1500);}
@@ -326,7 +348,7 @@ function resetWorld(){
   useEurope=false;
   mapSeed=Math.floor(Math.random()*10000);
   landMask=null;mapCache=null;
-  initBase();renderTools();
+  initBase();renderTools();updateBrushVisibility();
   const vo=document.getElementById('victory-overlay');
   if(vo) vo.style.display='none';
   document.getElementById('loading').style.display='flex';
@@ -338,7 +360,7 @@ function loadEurope(){
   cancelAnimationFrame(rafId);
   useEurope=true;
   landMask=null;mapCache=null;
-  initBase();renderTools();
+  initBase();renderTools();updateBrushVisibility();
   const vo=document.getElementById('victory-overlay');
   if(vo) vo.style.display='none';
   document.getElementById('loading').style.display='flex';
@@ -350,6 +372,7 @@ function loadEurope(){
 window.addEventListener('load',function(){
   initBase();
   renderTools();
+  updateBrushVisibility();
   setupEvents();
   document.getElementById('loading').style.display='flex';
   document.getElementById('loading-bar').style.width='0%';

@@ -91,6 +91,7 @@ function applyTool(cx,cy,isFirst){
 }
 
 function paintAt(sx,sy,isFirst){
+  if(!curTool) return; // no tool selected = pan mode, never draw
   const{x:cx,y:cy}=screenToCanvas(sx,sy);
   applyTool(Math.round(cx),Math.round(cy),isFirst);
 }
@@ -592,7 +593,8 @@ function spawnZombieWave(){
 
 // ── VICTORY CHECK ─────────────────────────────────────────────
 function checkVictory(){
-  if(gameOver||castles.length===0) return;
+  // Need at least 2 castles placed before anyone can "win"
+  if(gameOver||castles.length<2) return;
   const aliveTeams=new Set(
     castles.filter(c=>!defeated.find(d=>d.castle===c)).map(c=>c.team)
   );

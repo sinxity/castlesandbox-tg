@@ -11,20 +11,22 @@
   /* TOP BAR */
   #topbar{position:absolute;top:env(safe-area-inset-top,8px);left:8px;right:8px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:50}
   #topbar>*{pointer-events:auto}
-  #map-btns{display:flex;gap:4px;flex-wrap:wrap;max-width:55%}
-  .tbtn{background:linear-gradient(180deg,#3a3a3a,#252525);border:1px solid #555;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;color:#ddd;cursor:pointer;letter-spacing:.2px;box-shadow:0 2px 0 #111,inset 0 1px 0 rgba(255,255,255,0.1);text-shadow:0 1px 2px rgba(0,0,0,0.8)}
-  .tbtn:active{opacity:.7}
+  #map-btns{display:flex;gap:5px;flex-wrap:wrap;max-width:55%}
+  .tbtn{background:linear-gradient(180deg,#3a3a3a,#252525);border:1px solid #555;border-radius:7px;padding:7px 10px;font-size:15px;color:#ddd;cursor:pointer;box-shadow:0 2px 0 #111,inset 0 1px 0 rgba(255,255,255,0.1);display:inline-flex;align-items:center;justify-content:center;min-height:34px;min-width:34px}
+  .tbtn:active{opacity:.65;transform:translateY(1px)}
   .tbtn.active{background:linear-gradient(180deg,#378ADD,#2260a0);border-color:#5aabff;color:#fff}
 
   /* STATS */
   #stats{background:linear-gradient(180deg,rgba(30,20,10,0.92),rgba(20,15,5,0.92));backdrop-filter:blur(8px);border:1px solid #554400;border-radius:6px;padding:6px 10px;font-size:10px;color:#aa9966;line-height:1.9;min-width:80px;text-align:right;box-shadow:0 2px 8px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,200,50,0.1)}
   #stats b{color:#ffd700;font-weight:700;text-shadow:0 0 6px rgba(255,215,0,0.3)}
 
-  /* FACTION SELECTOR */
-  #faction-row{display:flex;gap:4px;justify-content:flex-end;margin-top:4px}
-  .fbtn{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);transition:all .15s}
-  .fbtn:active{transform:scale(0.88)}
-  .fbtn.selected{border-color:#fff;box-shadow:0 0 6px rgba(255,255,255,0.6)}
+  /* FACTION BAR (in bottom panel) */
+  #faction-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:0.5px solid rgba(255,255,255,0.08);font-size:10px;color:rgba(255,255,255,0.45)}
+  #faction-bar b{color:#ffd700;font-weight:700}
+  #faction-bar .flabel{margin-right:2px;opacity:0.6}
+  .fbtn{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);transition:all .15s}
+  .fbtn:active{transform:scale(0.85)}
+  .fbtn.selected{border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,0.7)}
 
   /* EVENT LOG */
   #elog{position:absolute;bottom:4px;left:8px;font-size:10px;color:rgba(255,255,255,0.88);line-height:1.65;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,0.9);z-index:10;max-width:55%}

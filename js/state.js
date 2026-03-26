@@ -24,7 +24,7 @@ let spriteDirty=true;
 // Day/night cycle
 let dayTime=0; // 0=noon, 0.5=midnight, cycles 0..1
 let daySpeed=0.0002; // full cycle ~83 seconds
-let curTab=0,curTool='water',brushSz=4;
+let curTab=0,curTool=null,brushSz=4; // curTool=null means pan/hand mode (default)
 let isDrawing=false,drawStart=null;
 let rafId=null;
 // Map mode: true = Europe polygon map, false = random noise map
