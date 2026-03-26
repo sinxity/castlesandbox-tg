@@ -26,7 +26,7 @@ let lastSpriteCell={x:-99,y:-99};
 let lastPaintPos={x:-99,y:-99};
 
 function placeSprite(cx,cy){
-  const gridSz=curTool==='house'?20:10;
+  const gridSz=curTool==='house'?24:16;
   const lx=lastPaintPos.x<0?cx:lastPaintPos.x;
   const ly=lastPaintPos.y<0?cy:lastPaintPos.y;
   const dist=Math.hypot(cx-lx,cy-ly);

@@ -3,9 +3,9 @@ function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
   // Screen size = canvas size, no DPR scaling (fixes stretch bug)
-  // Map is 2x screen size - balance between world size and performance
-  W=Math.floor(wrap.clientWidth*2);
-  H=Math.floor(wrap.clientHeight*2);
+  // Map is 3x screen size - higher resolution world
+  W=Math.floor(wrap.clientWidth*3);
+  H=Math.floor(wrap.clientHeight*3);
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
