@@ -207,6 +207,20 @@ function drawCastle(c){
   ctx.fillText('Lv'+lv+' '+(ld?ld.name:''),cx,cy+S+13);
   ctx.textAlign='left';
 
+  // Castle HP bar (visible when damaged)
+  if(!isDefeated){
+    const hp=Math.round(c.castleHp||100);
+    if(hp<100){
+      const bw=S*2+4,bx=cx-S-2,by=cy+S+18;
+      ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(bx,by,bw,5);
+      const hpFrac=hp/100;
+      ctx.fillStyle=hpFrac>0.6?'#2ecc71':hpFrac>0.3?'#f1c40f':'#e74c3c';
+      ctx.fillRect(bx,by,Math.round(bw*hpFrac),5);
+      ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='bold 5px monospace';ctx.textAlign='center';
+      ctx.fillText('HP '+hp,cx,by+9);ctx.textAlign='left';
+    }
+  }
+
   // Warehouse (resource display)
   if(!isDefeated){
     const wx=cx+S+6,wy=cy-8;

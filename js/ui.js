@@ -404,7 +404,7 @@ function saveGame(){
   try{
     const data={
       mapSeed,useEurope,dayTime,dayCount,weather,playerTeam,
-      castles:castles.map(c=>({nx:c.nx,ny:c.ny,team:c.team,power:c.power,radius:c.radius,level:c.level||1,xp:c.xp||0})),
+      castles:castles.map(c=>({nx:c.nx,ny:c.ny,team:c.team,power:c.power,radius:c.radius,level:c.level||1,xp:c.xp||0,castleHp:c.castleHp||100})),
       RES:JSON.parse(JSON.stringify(RES)),
       bots:bots.slice(0,80).map(b=>({x:b.x,y:b.y,team:b.team,hp:b.hp,maxhp:b.maxhp,isKnight:b.isKnight,state:b.state==='zombie'?'zombie':'seek'}))
     };
@@ -436,7 +436,7 @@ function loadGame(){
       castles=[];
       (data.castles||[]).forEach(cd=>{
         const c={nx:cd.nx,ny:cd.ny,team:cd.team,power:cd.power||50,radius:cd.radius||8,
-          cells:[],attackCooldown:0,craftTimer:0,level:cd.level||1,xp:cd.xp||0};
+          cells:[],attackCooldown:0,craftTimer:0,level:cd.level||1,xp:cd.xp||0,castleHp:cd.castleHp||100};
         computeTerritory(c);castles.push(c);
       });
       rebuildTerritories();

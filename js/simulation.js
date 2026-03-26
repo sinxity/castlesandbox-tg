@@ -123,7 +123,7 @@ function paintAt(sx,sy,isFirst){
 function placeCastle(cx,cy,team){
   castles=castles.filter(c=>c.team!==team);
   bots=bots.filter(b=>b.team!==team);
-  const c={nx:cx/W,ny:cy/H,team,power:50,radius:6,cells:[],attackCooldown:0,craftTimer:0,level:1,xp:0};
+  const c={nx:cx/W,ny:cy/H,team,power:50,radius:6,cells:[],attackCooldown:0,craftTimer:0,level:1,xp:0,castleHp:100};
   computeTerritory(c);castles.push(c);
   rebuildTerritories();
   RES[team]={wood:0,stone:0,iron:0,swords:0,armor:0,knights:0};
@@ -147,6 +147,11 @@ function updateCastles(){
     c.power=Math.min(500,c.power+0.08);
     if(!c.level) c.level=1;
     if(!c.xp) c.xp=0;
+    if(!c.castleHp) c.castleHp=100;
+    // Castle HP regenerates slowly when not under siege
+    if(c.castleHp<100&&!raids.find(r=>r.targetTeam===c.team&&r.phase==='battle')){
+      c.castleHp=Math.min(100,c.castleHp+0.03);
+    }
     const r=RES[c.team];
     const totalRes=(r.wood+r.stone+r.iron);
     c.xp+=0.02+totalRes*0.001;
@@ -506,42 +511,81 @@ function updateRaids(){
       raid.battleTimer++;
       const enemy=castles.find(c=>c.team===raid.targetTeam);
       if(!enemy){raid.phase='loot';return true;}
+      if(!enemy.castleHp||enemy.castleHp>100) enemy.castleHp=100;
 
-      // Bug fix: use mark-and-sweep instead of splice inside forEach
       const toKill=new Set();
-      aliveKnights.forEach(k=>{
-        const ei=bots.findIndex((e,i)=>!toKill.has(i)&&e.team!==k.team&&Math.hypot(e.x-k.x,e.y-k.y)<=6);
-        if(ei>=0){bots[ei].hp-=1;if(bots[ei].hp<=0) toKill.add(ei);}
+      // Check defenders (any enemy bot within siege zone)
+      const defenderIdxs=[];
+      bots.forEach((b,i)=>{
+        if(b.team===raid.targetTeam&&Math.hypot(b.x-raid.tx,b.y-raid.ty)<90) defenderIdxs.push(i);
       });
-      if(toKill.size>0) bots=bots.filter((_,i)=>!toKill.has(i));
 
-      enemy.power=Math.max(0,enemy.power-aliveKnights.length*0.4);
+      if(defenderIdxs.length>0){
+        // ── COMBAT PHASE: fight defenders first ──────────────────
+        aliveKnights.forEach(k=>{
+          let bestIdx=-1,bestD=50;
+          defenderIdxs.forEach(i=>{
+            if(toKill.has(i)) return;
+            const b=bots[i];
+            // Knights get priority (closer effective distance)
+            const d=Math.hypot(b.x-k.x,b.y-k.y)*(b.isKnight?0.6:1);
+            if(d<bestD){bestD=d;bestIdx=i;}
+          });
+          if(bestIdx<0) return;
+          const tgt=bots[bestIdx];
+          const realD=Math.hypot(tgt.x-k.x,tgt.y-k.y);
+          if(realD>4){
+            moveToward(k,tgt.x,tgt.y);
+          } else {
+            tgt.hp-=2;
+            if(tgt.hp<=0) toKill.add(bestIdx);
+            if(raid.battleTimer%5===0){
+              lootAnims.push({x:k.x+(Math.random()*6-3),y:k.y,team:raid.team,type:'clash',age:0});
+              spawnExplosion(k.x,k.y,2,255,220,50);
+            }
+          }
+        });
+        if(toKill.size>0) bots=bots.filter((_,i)=>!toKill.has(i));
+      } else {
+        // ── SIEGE PHASE: no defenders left, attack castle HP ─────
+        // Knights form a ring around the castle
+        aliveKnights.forEach((k,idx)=>{
+          const angle=(idx/Math.max(1,aliveKnights.length))*Math.PI*2;
+          const sr=18+Math.floor(aliveKnights.length*0.5);
+          const tx=Math.round(raid.tx+Math.cos(angle)*sr);
+          const ty=Math.round(raid.ty+Math.sin(angle)*sr);
+          moveToward(k,tx,ty);
+        });
+        // Each knight deals 2 damage every 15 ticks
+        if(raid.battleTimer%15===0){
+          const dmg=aliveKnights.length*2;
+          enemy.castleHp=Math.max(0,enemy.castleHp-dmg);
+          lootAnims.push({x:raid.tx+(Math.random()*24-12),y:raid.ty-8,
+            team:raid.team,type:'clash',age:0});
+          spawnExplosion(raid.tx+(Math.random()*16-8),raid.ty+(Math.random()*16-8),5,200,120,40);
+        }
 
-      if(raid.battleTimer%5===0){
-        lootAnims.push({x:raid.tx+Math.random()*20-10,y:raid.ty+Math.random()*20-10,
-          team:raid.team,type:'clash',age:0});
-      }
-
-      if(enemy.power<=0){
-        const er=RES[raid.targetTeam];
-        const myR=RES[raid.team];
-        const lootWood=Math.floor(er.wood*0.5);
-        const lootStone=Math.floor(er.stone*0.5);
-        const lootIron=Math.floor(er.iron*0.5);
-        myR.wood=Math.min(99,myR.wood+lootWood);
-        myR.stone=Math.min(99,myR.stone+lootStone);
-        myR.iron=Math.min(99,myR.iron+lootIron);
-        er.wood-=lootWood;er.stone-=lootStone;er.iron-=lootIron;
-        raid.loot=lootWood+lootStone+lootIron;
-        defeated.push({castle:enemy,timer:3000});
-        enemy.power=0;enemy.radius=3;
-        computeTerritory(enemy);rebuildTerritories();
-        logEvent('🏆 '+raid.team+' захватил замок! +'+raid.loot+' ресурсов');
-        lootAnims.push({x:raid.tx,y:raid.ty,team:raid.team,type:'victory',age:0});
-        raid.phase='return';
-      } else if(raid.battleTimer>400){
-        logEvent('🏃 '+raid.team+' отступил — замок устоял!');
-        raid.phase='return';
+        if(enemy.castleHp<=0){
+          const er=RES[raid.targetTeam];
+          const myR=RES[raid.team];
+          const lootWood=Math.floor(er.wood*0.5);
+          const lootStone=Math.floor(er.stone*0.5);
+          const lootIron=Math.floor(er.iron*0.5);
+          myR.wood=Math.min(99,myR.wood+lootWood);
+          myR.stone=Math.min(99,myR.stone+lootStone);
+          myR.iron=Math.min(99,myR.iron+lootIron);
+          er.wood-=lootWood;er.stone-=lootStone;er.iron-=lootIron;
+          raid.loot=lootWood+lootStone+lootIron;
+          defeated.push({castle:enemy,timer:3000});
+          enemy.power=0;enemy.radius=3;enemy.castleHp=100;
+          computeTerritory(enemy);rebuildTerritories();
+          logEvent('🏆 '+raid.team+' захватил замок! +'+raid.loot+' ресурсов');
+          lootAnims.push({x:raid.tx,y:raid.ty,team:raid.team,type:'victory',age:0});
+          raid.phase='return';
+        } else if(raid.battleTimer>700){
+          logEvent('🏃 '+raid.team+' отступил — замок устоял!');
+          raid.phase='return';
+        }
       }
     } else if(raid.phase==='return'){
       const castle=castles.find(c=>c.team===raid.team);
