@@ -237,9 +237,8 @@ function updateCastles(){
         if(tr.wood>5){tr.wood-=3;ar.iron=(ar.iron||0)+2;logEvent('🤝 Золотые торгуют с '+ally.team);}
       }
     }
-    // ALL factions auto-build; speed scales with level + trait.buildSpeed
-    const bspd=1+(TRAITS[c.team]?.buildSpeed||0)+(c.level||1);
-    if(c.craftTimer%Math.max(8,Math.floor(80/bspd))===0){
+    // ALL factions auto-build every craft tick (already gated by %80 above)
+    {
       const rb=RES[c.team];
       const bhx=Math.round(c.nx*W),bhy=Math.round(c.ny*H);
       const BR=Math.round(c.radius*Math.min(W,H)/100*0.75);
@@ -256,11 +255,11 @@ function updateCastles(){
       }
       // Decide what to build based on need and level
       let buildType=null;
-      if(lv>=2&&farmCount<2&&rb.wood>=2) buildType='farm';
-      else if(lv>=3&&smithyCount<1&&rb.stone>=3) buildType='smithy';
-      else if(lv>=3&&barracksCount<1&&rb.stone>=3&&rb.wood>=2) buildType='barracks';
-      else if(lv>=4&&marketCount<1&&rb.wood>=3&&rb.gold===undefined) buildType='market';
-      else if(lv>=3&&towerCount<lv&&rb.stone>=4) buildType='tower';
+      if(lv>=2&&farmCount<2&&rb.wood>=1) buildType='farm';
+      else if(lv>=3&&smithyCount<1&&rb.stone>=2) buildType='smithy';
+      else if(lv>=3&&barracksCount<1&&rb.stone>=2&&rb.wood>=1) buildType='barracks';
+      else if(lv>=4&&marketCount<1&&rb.wood>=2) buildType='market';
+      else if(lv>=3&&towerCount<lv&&rb.stone>=2) buildType='tower';
       else if(rb.stone>=1) buildType='wall';
       else if(rb.wood>=1) buildType='house';
       if(buildType){
