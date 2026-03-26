@@ -186,6 +186,23 @@ function drawCastle(c){
     ctx.fillStyle='#888';ctx.fillRect(cx+1,cy-ks-7,5,3);
   }
 
+  // Capture animation
+  if(c.captureFx){
+    c.captureFx.age++;
+    const p=Math.min(1,c.captureFx.age/80);
+    const fromCol=TC[c.captureFx.fromTeam]||'#888';
+    const toCol=TC[c.captureFx.toTeam]||'#888';
+    if(p<1){
+      // Flashing transition
+      ctx.globalAlpha=Math.sin(p*Math.PI*4)*0.5+0.5;
+      ctx.fillStyle=toCol;
+      ctx.fillRect(cx-S,cy-S-6,S*2,S+6);
+      ctx.globalAlpha=1;
+    } else {
+      c.captureFx=null;
+    }
+  }
+
   // XP arc
   const xpPct=Math.min(1,(c.xp||0)/LEVEL_XP[Math.min(lv,4)]);
   ctx.beginPath();ctx.arc(cx,cy,S+5,0-Math.PI/2,0-Math.PI/2+Math.PI*2*xpPct);
@@ -252,6 +269,53 @@ function drawArmy(a){
 function drawBot(b){
   const tc=TC[b.team]||'#888';
   const px=Math.round(b.x),py=Math.round(b.y);
+  if(b.isHero){
+    // Hero — large distinctive figure ~9x13px
+    const px2=Math.round(b.x),py2=Math.round(b.y);
+    const cx2=px2-4,cy2=py2-12;
+    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(cx2+1,py2,8,3);
+    // Cape
+    ctx.fillStyle=tc;ctx.fillRect(cx2,cy2+4,9,8);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(cx2+7,cy2+4,2,8);
+    // Plumed helmet
+    ctx.fillStyle='#ccccdd';ctx.fillRect(cx2+2,cy2+1,5,4);
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx2+3,cy2+2,3,2);
+    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fillRect(cx2+2,cy2+1,2,1);
+    // Plume in team color
+    ctx.fillStyle=tc;ctx.fillRect(cx2+3,cy2-2,3,4);
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx2+3,cy2-2,1,2);
+    // Sword (longer)
+    ctx.fillStyle='#ddddee';ctx.fillRect(cx2+9,cy2,1,10);
+    ctx.fillStyle='#aaaacc';ctx.fillRect(cx2+8,cy2+2,3,1);
+    // Legs
+    ctx.fillStyle='#333344';ctx.fillRect(cx2+2,cy2+12,2,4);ctx.fillRect(cx2+5,cy2+12,2,4);
+    ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(cx2+2,cy2+12,1,2);
+    // HP bar (always visible for hero)
+    const hpFrac=b.hp/b.maxhp;
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(cx2-1,cy2-5,11,3);
+    ctx.fillStyle=hpFrac>0.5?'#2ecc71':'#e74c3c';ctx.fillRect(cx2-1,cy2-5,Math.round(11*hpFrac),3);
+    // Gold star above hero
+    ctx.fillStyle='#ffd700';ctx.font='6px serif';ctx.textAlign='center';
+    ctx.fillText('★',px2,cy2-5);ctx.textAlign='left';
+    return;
+  }
+  if(b.isSpy){
+    const px3=Math.round(b.x),py3=Math.round(b.y);
+    const cx3=px3-2,cy3=py3-8;
+    // Spy — dark hooded figure
+    ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fillRect(cx3,py3,5,2);
+    // Dark cloak
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(cx3,cy3+2,5,7);
+    ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(cx3,cy3+2,1,6);
+    // Hood
+    ctx.fillStyle='#252535';ctx.fillRect(cx3,cy3,5,4);
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx3+1,cy3+1,3,2); // face shadow
+    // Team color eyes (glowing)
+    ctx.fillStyle=tc;ctx.fillRect(cx3+1,cy3+2,1,1);ctx.fillRect(cx3+3,cy3+2,1,1);
+    // Dagger
+    ctx.fillStyle='#aaaacc';ctx.fillRect(cx3+5,cy3+4,1,4);
+    return;
+  }
   if(b.isKnight){
     // Knight — armoured pixel figure ~7x10px
     const cx=px-3,cy=py-9;
@@ -304,7 +368,8 @@ const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',
   tree:'#235a14',pine:'#1a4a0a',cactus:'#4a8a30',ore:'#7a4010',gold:'#e6b800',
   crystal:'#6699cc',fire:'#ff4400',burned:'#2a2a2a',plague:'#446611',
   house:'#a0522d',wall:'#888899',gate:'#665533',
-  vil_red:'#c0392b',vil_blue:'#2471a3',vil_green:'#1e8449',vil_gold:'#d4ac0d'};
+  vil_red:'#c0392b',vil_blue:'#2471a3',vil_green:'#1e8449',vil_gold:'#d4ac0d',
+  smithy:'#5a5060',market:'#8a7050',barracks:'#484858',farm:'#8a3010',tower:'#666678'};
 
 const DITHER_PAL={
   water:[
@@ -730,6 +795,11 @@ function drawSprite(t,x,y,owner){
     case 'house':  drawHouse(x,y,owner); break;
     case 'wall':   drawWall(x,y); break;
     case 'gate':   drawGate(x,y); break;
+    case 'smithy':  drawSmithy(x,y); break;
+    case 'market':  drawMarket(x,y); break;
+    case 'barracks':drawBarracks(x,y); break;
+    case 'farm':    drawFarm(x,y); break;
+    case 'tower':   drawTowerBuilding(x,y); break;
   }
 }
 
@@ -989,4 +1059,150 @@ function drawGate(x,y){
   // Gold lock / keystone
   ctx.fillStyle='#cc9900';ctx.fillRect(x+7,y+4,2,2);
   ctx.fillStyle='#eecc00';ctx.fillRect(x+7,y+4,1,1);
+}
+
+function drawSmithy(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+14,14,3);
+  // Stone base
+  ctx.fillStyle='#5a5060';ctx.fillRect(x,y+8,16,8);
+  ctx.fillStyle='#6a6070';ctx.fillRect(x,y+8,16,2);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+14,y+8,2,8);
+  // Stone blocks texture
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.fillRect(x,y+11,8,1);ctx.fillRect(x+8,y+12,8,1);
+  ctx.fillRect(x+5,y+8,1,8);ctx.fillRect(x+11,y+8,1,8);
+  // Roof (dark wood)
+  ctx.fillStyle='#3a2808';ctx.fillRect(x,y+4,16,5);
+  ctx.fillStyle='#4a3810';ctx.fillRect(x,y+4,16,1);
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+14,y+4,2,5);
+  // Chimney
+  ctx.fillStyle='#444450';ctx.fillRect(x+10,y-2,5,7);
+  ctx.fillStyle='#222228';ctx.fillRect(x+10,y-2,5,2);
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+14,y-2,1,7);
+  // Forge glow (orange window)
+  ctx.fillStyle='#ff6600';ctx.fillRect(x+2,y+9,4,4);
+  ctx.fillStyle='#ff9900';ctx.fillRect(x+3,y+9,2,3);
+  ctx.fillStyle='rgba(255,150,0,0.4)';ctx.fillRect(x+1,y+8,6,6);
+  // Smoke from chimney
+  ctx.fillStyle='rgba(180,180,185,0.5)';ctx.fillRect(x+11,y-4,3,3);
+  ctx.fillStyle='rgba(160,160,165,0.3)';ctx.fillRect(x+10,y-6,4,3);
+  // Anvil silhouette in door
+  ctx.fillStyle='#111';ctx.fillRect(x+8,y+10,5,4);
+  ctx.fillStyle='#888';ctx.fillRect(x+9,y+9,3,2);
+}
+
+function drawMarket(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+2,y+14,14,3);
+  // Base platform
+  ctx.fillStyle='#8a7050';ctx.fillRect(x,y+10,16,6);
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+14,y+10,2,6);
+  ctx.fillStyle='#9a8060';ctx.fillRect(x,y+10,16,1);
+  // Stall frame
+  ctx.fillStyle='#5a3808';ctx.fillRect(x,y+4,2,7);
+  ctx.fillStyle='#5a3808';ctx.fillRect(x+14,y+4,2,7);
+  ctx.fillStyle='#5a3808';ctx.fillRect(x,y+4,16,2);
+  // Striped awning (gold+red or blue stripes)
+  const stripes=['#e6b800','#cc2200','#e6b800','#cc2200'];
+  for(let i=0;i<4;i++){
+    ctx.fillStyle=stripes[i];ctx.fillRect(x+i*4,y+4,4,4);
+  }
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(x,y+4,16,1);
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x,y+7,16,1);
+  // Goods on counter
+  ctx.fillStyle='#d4a030';ctx.fillRect(x+2,y+10,3,2); // bread/wheat
+  ctx.fillStyle='#c03020';ctx.fillRect(x+6,y+10,2,2); // apples
+  ctx.fillStyle='#3060b0';ctx.fillRect(x+9,y+10,2,2); // cloth
+  ctx.fillStyle='#50a030';ctx.fillRect(x+12,y+10,2,2); // produce
+  // Gold coin highlight
+  ctx.fillStyle='#ffe040';ctx.fillRect(x+7,y+11,1,1);ctx.fillRect(x+9,y+12,1,1);
+  // Hanging lantern
+  ctx.fillStyle='#8a6010';ctx.fillRect(x+7,y+1,2,4);
+  ctx.fillStyle='#ffe080';ctx.fillRect(x+6,y+2,4,3);
+  ctx.fillStyle='rgba(255,220,80,0.35)';ctx.fillRect(x+4,y+1,8,5);
+}
+
+function drawBarracks(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+14,14,3);
+  // Stone walls — dark military look
+  ctx.fillStyle='#484858';ctx.fillRect(x,y+6,16,10);
+  ctx.fillStyle='#585868';ctx.fillRect(x,y+6,16,2);
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+14,y+6,2,10);
+  // Block texture
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.fillRect(x,y+9,6,1);ctx.fillRect(x+6,y+11,10,1);
+  ctx.fillRect(x+4,y+6,1,10);ctx.fillRect(x+10,y+6,1,10);
+  // Roof with battlements
+  ctx.fillStyle='#383848';ctx.fillRect(x,y+2,16,5);
+  ctx.fillStyle='#484858';ctx.fillRect(x+0,y+1,3,3);
+  ctx.fillStyle='#484858';ctx.fillRect(x+5,y+1,3,3);
+  ctx.fillStyle='#484858';ctx.fillRect(x+10,y+1,3,3);
+  ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(x,y+2,16,1);
+  // Door (arched)
+  ctx.fillStyle='#1a1208';ctx.fillRect(x+6,y+8,4,8);
+  ctx.fillStyle='#1a1208';ctx.fillRect(x+5,y+7,6,3);
+  ctx.fillStyle='#484858';ctx.fillRect(x+5,y+7,1,1);ctx.fillRect(x+10,y+7,1,1);
+  // Crossed weapons on wall
+  ctx.fillStyle='#aaaacc';
+  ctx.fillRect(x+1,y+7,1,4);ctx.fillRect(x+2,y+7,4,1); // horizontal spear
+  ctx.fillRect(x+13,y+7,1,4);ctx.fillRect(x+10,y+7,4,1); // horizontal spear
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(x+1,y+7,1,1);ctx.fillRect(x+13,y+7,1,1);
+}
+
+function drawFarm(x,y){
+  // Ground/dirt base
+  ctx.fillStyle='#7a5530';ctx.fillRect(x,y+12,16,4);
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x,y+14,16,2);
+  // Crop rows
+  const cropColors=['#c8a020','#d4b030','#b89020','#c0a828'];
+  for(let row=0;row<3;row++){
+    ctx.fillStyle=cropColors[row%4];
+    ctx.fillRect(x+1,y+8+row*2,14,1);
+    // Wheat stalks
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    for(let stk=1;stk<14;stk+=3) ctx.fillRect(x+stk,y+8+row*2,1,2);
+  }
+  // Fence posts
+  ctx.fillStyle='#8a5a28';
+  ctx.fillRect(x,y+7,1,6);ctx.fillRect(x+5,y+7,1,6);
+  ctx.fillRect(x+10,y+7,1,6);ctx.fillRect(x+15,y+7,1,6);
+  // Fence rails
+  ctx.fillRect(x,y+8,16,1);ctx.fillRect(x,y+11,16,1);
+  // Small barn
+  ctx.fillStyle='#8a3010';ctx.fillRect(x+2,y+0,12,8);
+  ctx.fillStyle='#aa4018';ctx.fillRect(x+2,y+0,12,2); // roof top
+  ctx.fillStyle='#6a2008';ctx.fillRect(x+2,y+6,12,2); // shadow eave
+  // Barn door
+  ctx.fillStyle='#3a1a08';ctx.fillRect(x+6,y+3,4,5);
+  ctx.fillStyle='rgba(255,200,100,0.3)';ctx.fillRect(x+7,y+3,2,4); // light inside
+  // Barn cross detail
+  ctx.fillStyle='#5a2808';ctx.fillRect(x+3,y+1,6,1);ctx.fillRect(x+6,y+0,1,3);
+}
+
+function drawTowerBuilding(x,y){
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(x+3,y+14,12,3);
+  // Tower base — wide
+  ctx.fillStyle='#666678';ctx.fillRect(x+1,y+8,14,8);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+13,y+8,2,8);
+  ctx.fillStyle='#777788';ctx.fillRect(x+1,y+8,14,2);
+  // Tower shaft — narrower
+  ctx.fillStyle='#5a5a6c';ctx.fillRect(x+3,y+0,10,10);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+11,y+0,2,10);
+  ctx.fillStyle='#6a6a7c';ctx.fillRect(x+3,y+0,10,2);
+  // Block texture
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.fillRect(x+3,y+4,10,1);ctx.fillRect(x+1,y+11,14,1);
+  ctx.fillRect(x+7,y+0,1,8);ctx.fillRect(x+5,y+8,1,8);ctx.fillRect(x+11,y+8,1,8);
+  // Arrow slit
+  ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(x+7,y+2,2,5);
+  ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(x+2,y+10,2,4);ctx.fillRect(x+12,y+10,2,4);
+  // Top crenellations
+  ctx.fillStyle='#6a6a7c';
+  ctx.fillRect(x+3,y-3,2,4);ctx.fillRect(x+7,y-3,2,4);ctx.fillRect(x+11,y-3,2,4);
+  ctx.fillStyle='rgba(255,255,255,0.12)';ctx.fillRect(x+3,y-3,2,1);ctx.fillRect(x+7,y-3,2,1);ctx.fillRect(x+11,y-3,2,1);
+  // Arrow tip sticking out of slit (when active)
+  ctx.fillStyle='#bbbbcc';ctx.fillRect(x+8,y+4,4,1);
 }

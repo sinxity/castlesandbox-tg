@@ -18,10 +18,11 @@ function explode(cx,cy,R,lava){
 
 // ── TOOLS ─────────────────────────────────────────────────────
 const SINGLE_PLACE=new Set(['house','gate','tree','pine','ore','gold','crystal','cactus',
-  'vil_red','vil_blue','vil_green','vil_gold','bomb','meteor','lightning']);
+  'vil_red','vil_blue','vil_green','vil_gold','bomb','meteor','lightning',
+  'spy_red','spy_blue','spy_green','spy_gold']);
 
 const SPRITE_TOOLS=new Set(['house','tree','pine','ore','gold','crystal','cactus','wall','gate']);
-const ONESHOT_TOOLS=new Set(['bomb','meteor','lightning','vil_red','vil_blue','vil_green','vil_gold']);
+const ONESHOT_TOOLS=new Set(['bomb','meteor','lightning','vil_red','vil_blue','vil_green','vil_gold','spy_red','spy_blue','spy_green','spy_gold']);
 let lastSpriteCell={x:-99,y:-99};
 let lastPaintPos={x:-99,y:-99};
 
@@ -90,6 +91,18 @@ function applyTool(cx,cy,isFirst){
       }
       placeCastle(safeCx,safeCy,curTool.replace('vil_',''));
     }
+    else if(curTool.startsWith('spy_')){
+      if(!isFirst) return;
+      const spyTeam=curTool.split('_')[1];
+      const castle2=castles.find(cc=>cc.team===spyTeam);
+      if(!castle2){showHint('Нет замка '+spyTeam);return;}
+      bots.push({x:safeCx,y:safeCy,team:spyTeam,hp:8,maxhp:8,
+        timer:0,isKnight:false,isSpy:true,
+        carrying:null,res:0,
+        homeX:Math.round(castle2.nx*W),homeY:Math.round(castle2.ny*H),
+        state:'spy'});
+      logEvent('🕵 Шпион '+spyTeam+' заслан!');
+    }
     return;
   }
 
@@ -137,6 +150,9 @@ function placeCastle(cx,cy,team){
       n++;
     }
   }
+  // Spawn hero
+  bots.push({x:cx,y:cy-10,team,hp:50,maxhp:50,timer:0,isKnight:false,isHero:true,
+    carrying:null,res:0,homeX:cx,homeY:cy,state:'seek'});
   logEvent('🏰 Замок '+team+' (+10 работяг)');
 }
 
@@ -193,6 +209,18 @@ function updateCastles(){
   castles.forEach(c=>{
     const r=RES[c.team];if(!r) return;
     c.craftTimer=(c.craftTimer||0)+1;
+    // Special building bonuses
+    if(c.craftTimer%60===0&&c.cells){
+      for(let i=0;i<c.cells.length;i+=2){
+        const bt=grid[c.cells[i+1]]&&grid[c.cells[i+1]][c.cells[i]]?grid[c.cells[i+1]][c.cells[i]].type:null;
+        if(bt==='smithy'){r.iron=Math.min(99,(r.iron||0)+1);}
+        if(bt==='farm'){r.wood=Math.min(99,(r.wood||0)+1);}
+        if(bt==='market'&&r.wood>5){r.wood-=2;r.iron=Math.min(99,(r.iron||0)+1);}
+        if(bt==='barracks'&&r.swords>=1&&r.armor>=1){
+          r.swords--;r.armor--;r.knights=(r.knights||0)+1;
+        }
+      }
+    }
     if(c.craftTimer%80!==0) return;
     if(r.wood>=3&&r.iron>=2){r.wood-=3;r.iron-=2;r.swords++;logEvent('⚔️ '+c.team+' скрафтил меч!');}
     if(r.stone>=4&&r.iron>=2){r.stone-=4;r.iron-=2;r.armor++;logEvent('🛡 '+c.team+' скрафтил броню!');}
@@ -211,58 +239,47 @@ function updateCastles(){
     }
     // ALL factions auto-build; speed scales with level + trait.buildSpeed
     const bspd=1+(TRAITS[c.team]?.buildSpeed||0)+(c.level||1);
-    if(c.craftTimer%Math.max(15,Math.floor(100/bspd))===0){
+    if(c.craftTimer%Math.max(8,Math.floor(80/bspd))===0){
       const rb=RES[c.team];
-      if(rb.wood>=1||rb.stone>=1){
-        const bhx=Math.round(c.nx*W),bhy=Math.round(c.ny*H);
-        const BR=Math.round(c.radius*Math.min(W,H)/100*0.78);
-        for(let attempt=0;attempt<12;attempt++){
+      const bhx=Math.round(c.nx*W),bhy=Math.round(c.ny*H);
+      const BR=Math.round(c.radius*Math.min(W,H)/100*0.75);
+      // Count existing special buildings in territory
+      const lv=c.level||1;
+      let smithyCount=0,marketCount=0,barracksCount=0,farmCount=0,towerCount=0;
+      if(c.cells) for(let i=0;i<c.cells.length;i+=2){
+        const t=grid[c.cells[i+1]]&&grid[c.cells[i+1]][c.cells[i]]?grid[c.cells[i+1]][c.cells[i]].type:null;
+        if(t==='smithy') smithyCount++;
+        if(t==='market') marketCount++;
+        if(t==='barracks') barracksCount++;
+        if(t==='farm') farmCount++;
+        if(t==='tower') towerCount++;
+      }
+      // Decide what to build based on need and level
+      let buildType=null;
+      if(lv>=2&&farmCount<2&&rb.wood>=2) buildType='farm';
+      else if(lv>=3&&smithyCount<1&&rb.stone>=3) buildType='smithy';
+      else if(lv>=3&&barracksCount<1&&rb.stone>=3&&rb.wood>=2) buildType='barracks';
+      else if(lv>=4&&marketCount<1&&rb.wood>=3&&rb.gold===undefined) buildType='market';
+      else if(lv>=3&&towerCount<lv&&rb.stone>=4) buildType='tower';
+      else if(rb.stone>=1) buildType='wall';
+      else if(rb.wood>=1) buildType='house';
+      if(buildType){
+        for(let attempt=0;attempt<15;attempt++){
           const angle=Math.random()*Math.PI*2;
-          const dist=BR*(0.2+Math.random()*0.75);
-          const bx2=Math.floor((bhx+Math.cos(angle)*dist)/10)*10;
-          const by2=Math.floor((bhy+Math.sin(angle)*dist)/10)*10;
-          if(bx2<0||by2<0||bx2>=W||by2>=H) continue;
-          const bc=grid[by2]&&grid[by2][bx2];
-          if(!bc||!WALKABLE.has(bc.type)) continue;
-          const rnd=Math.random();
-          if(rnd<0.35&&rb.stone>=1){
-            bc.type='wall';bc.owner=c.team;rb.stone--;
-          } else if(rnd<0.62&&rb.wood>=1){
-            bc.type='house';bc.owner=c.team;rb.wood--;
-            // New house in territory → bonus workers
-            let sp=0;
-            for(let dy=-12;dy<=12&&sp<3;dy++) for(let dx=-12;dx<=12&&sp<3;dx++){
-              const nx2=bx2+dx,ny2=by2+dy;
-              if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
-              if(isLand(nx2,ny2)&&Math.random()<0.25){
-                bots.push({x:nx2,y:ny2,team:c.team,hp:5,maxhp:5,
-                  timer:Math.floor(Math.random()*20),isKnight:false,
-                  carrying:null,res:0,homeX:bhx,homeY:bhy,state:'seek'});
-                sp++;
-              }
-            }
-          } else if(rnd<0.72&&rb.wood>=1&&rb.stone>=1&&(c.level||1)>=2){
-            bc.type='gate';bc.owner=c.team;rb.wood--;rb.stone--;
-          } else if(rb.stone>=1){
-            bc.type='wall';bc.owner=c.team;rb.stone--;
-          } else if(rb.wood>=1){
-            bc.type='house';bc.owner=c.team;rb.wood--;
-          } else break;
+          const dist=BR*(0.15+Math.random()*0.8);
+          const bx2=Math.floor((bhx+Math.cos(angle)*dist)/16)*16;
+          const by2=Math.floor((bhy+Math.sin(angle)*dist)/16)*16;
+          if(bx2<2||by2<2||bx2>=W-2||by2>=H-2) continue;
+          const bc2=grid[by2]&&grid[by2][bx2];
+          if(!bc2||!WALKABLE.has(bc2.type)) continue;
+          // Check no nearby castle
+          const tooClose=castles.some(oc=>oc!==c&&Math.hypot(oc.nx*W-bx2,oc.ny*H-by2)<20);
+          if(tooClose) continue;
+          bc2.type=buildType;bc2.owner=c.team;
+          if(buildType==='farm'||buildType==='house') rb.wood=Math.max(0,rb.wood-1);
+          else if(buildType==='wall'||buildType==='smithy'||buildType==='barracks'||buildType==='tower') rb.stone=Math.max(0,rb.stone-1);
+          else if(buildType==='market') rb.wood=Math.max(0,rb.wood-1);
           terrainDirty=true;break;
-        }
-        // Level 3+: build corner tower clusters (3x3 wall groups)
-        if((c.level||1)>=3&&rb.stone>=4&&c.craftTimer%Math.floor(400/bspd)===0){
-          const corners=[[-1,-1],[1,-1],[-1,1],[1,1]];
-          const ci=Math.floor(c.craftTimer/Math.floor(400/bspd))%4;
-          const [tcx,tcy]=corners[ci];
-          const td=BR*0.88;
-          const tx=Math.round(bhx+tcx*td),ty=Math.round(bhy+tcy*td);
-          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
-            const wx=Math.floor((tx+dx*10)/10)*10,wy=Math.floor((ty+dy*10)/10)*10;
-            if(wx<0||wy<0||wx>=W||wy>=H||rb.stone<1) continue;
-            const wc=grid[wy]&&grid[wy][wx];
-            if(wc&&WALKABLE.has(wc.type)){wc.type='wall';wc.owner=c.team;rb.stone--;terrainDirty=true;}
-          }
         }
       }
     }
@@ -344,8 +361,18 @@ function moveToward(b,tx,ty){
   if(dist<2) return true;
   const step=b.isKnight?2:1;
   const ndx=Math.round(dx/dist*step),ndy=Math.round(dy/dist*step);
+  function blocked(x,y){
+    if(x<0||y<0||x>=W||y>=H||!isLand(x,y)) return true;
+    const ct=grid[y]&&grid[y][x]?grid[y][x].type:'water';
+    return SOLID.has(ct)&&ct!=='rock'&&ct!=='mountain'; // only wall/gate blocks movement
+  }
   const nx2=b.x+ndx,ny2=b.y+ndy;
-  if(nx2>=0&&ny2>=0&&nx2<W&&ny2<H&&isLand(nx2,ny2)){b.x=nx2;b.y=ny2;}
+  if(!blocked(nx2,ny2)){b.x=nx2;b.y=ny2;return false;}
+  // Wall hit — try sliding horizontally or vertically
+  const nx3=b.x+ndx,ny3=b.y;
+  const nx4=b.x,ny4=b.y+ndy;
+  if(!blocked(nx3,ny3)){b.x=nx3;return false;}
+  if(!blocked(nx4,ny4)){b.y=ny4;return false;}
   return false;
 }
 
@@ -371,6 +398,64 @@ function updateBots(){
     const spd=b.isKnight?8:15;
     if(b.timer%spd!==0) return;
     if(!isLand(b.x,b.y)){dead.add(i);return;}
+
+    // Hero AI
+    if(b.isHero){
+      b.timer++;
+      if(b.timer%4!==0) return;
+      // Find nearest enemy
+      let heroTarget=null,heroD=120;
+      bots.forEach((e,j)=>{
+        if(dead.has(j)||e.team===b.team) return;
+        const d=Math.hypot(e.x-b.x,e.y-b.y);
+        if(d<heroD){heroD=d;heroTarget={e,j};}
+      });
+      if(heroTarget){
+        if(heroD>6) moveToward(b,heroTarget.e.x,heroTarget.e.y);
+        else{
+          heroTarget.e.hp-=5;
+          if(heroTarget.e.hp<=0) dead.add(heroTarget.j);
+          spawnExplosion(b.x,b.y,3,255,200,50);
+        }
+      } else {
+        const castle2=castles.find(cc=>cc.team===b.team);
+        if(castle2) moveToward(b,Math.round(castle2.nx*W)+Math.floor(Math.random()*20-10),Math.round(castle2.ny*H)+Math.floor(Math.random()*20-10));
+      }
+      return;
+    }
+
+    // Spy AI — infiltrate enemy territory and sabotage
+    if(b.isSpy&&b.state==='spy'){
+      b.timer++;
+      if(b.timer%6!==0) return;
+      // Find nearest enemy castle
+      const enemyCastle=castles.find(ec=>ec.team!==b.team&&!defeated.find(d=>d.castle===ec));
+      if(!enemyCastle) return;
+      const etx=Math.round(enemyCastle.nx*W),ety=Math.round(enemyCastle.ny*H);
+      const distToEnemy=Math.hypot(b.x-etx,b.y-ety);
+      if(distToEnemy>30){
+        moveToward(b,etx+Math.floor(Math.random()*20-10),ety+Math.floor(Math.random()*20-10));
+      } else {
+        // In enemy territory: look for buildings to sabotage
+        let sabotaged=false;
+        for(let dy2=-20;dy2<=20&&!sabotaged;dy2+=4) for(let dx2=-20;dx2<=20&&!sabotaged;dx2+=4){
+          const sx2=b.x+dx2,sy2=b.y+dy2;
+          if(sx2<0||sy2<0||sx2>=W||sy2>=H) continue;
+          const sc=grid[sy2]&&grid[sy2][sx2];
+          if(sc&&FLAMMABLE.has(sc.type)&&sc.type!=='grass'&&Math.random()<0.15){
+            sc.type='fire';fireCells.add(sy2*W+sx2);terrainDirty=true;
+            logEvent('🔥 Шпион '+b.team+' поджёг '+enemyCastle.team+'!');
+            sabotaged=true;
+            spawnExplosion(sx2,sy2,4,255,100,0);
+          }
+        }
+        if(!sabotaged) moveToward(b,etx+Math.floor(Math.random()*16-8),ety+Math.floor(Math.random()*16-8));
+      }
+      // Spy detected/killed if near enemy knights
+      const nearEnemy=bots.find(e=>e.team!==b.team&&e.isKnight&&Math.hypot(e.x-b.x,e.y-b.y)<8);
+      if(nearEnemy){b.hp-=3;if(b.hp<=0){dead.add(i);logEvent('☠ Шпион '+b.team+' пойман!');}}
+      return;
+    }
 
     // Zombie AI — runs before castle lookup (zombies have no castle)
     if(b.state==='zombie'){
@@ -563,6 +648,7 @@ function updateRaids(){
           lootAnims.push({x:raid.tx+(Math.random()*24-12),y:raid.ty-8,
             team:raid.team,type:'clash',age:0});
           spawnExplosion(raid.tx+(Math.random()*16-8),raid.ty+(Math.random()*16-8),5,200,120,40);
+          playSound('siege');
         }
 
         if(enemy.castleHp<=0){
@@ -581,6 +667,7 @@ function updateRaids(){
           computeTerritory(enemy);rebuildTerritories();
           logEvent('🏆 '+raid.team+' захватил замок! +'+raid.loot+' ресурсов');
           lootAnims.push({x:raid.tx,y:raid.ty,team:raid.team,type:'victory',age:0});
+          enemy.captureFx={fromTeam:raid.targetTeam,toTeam:raid.team,age:0};
           raid.phase='return';
         } else if(raid.battleTimer>700){
           logEvent('🏃 '+raid.team+' отступил — замок устоял!');
@@ -670,6 +757,27 @@ function updatePlague(){
     }
   }
   toRemove.forEach(k=>plagueCells.delete(k));
+}
+
+function updateTowers(){
+  if(tick%25!==0) return;
+  for(let y=0;y<H;y+=16) for(let x=0;x<W;x+=16){
+    const cell=grid[y]&&grid[y][x];
+    if(!cell||cell.type!=='tower'||!cell.owner) continue;
+    const ownerTeam=cell.owner;
+    let bestBot=null,bestD=80;
+    bots.forEach(b=>{
+      if(b.team===ownerTeam||b.state==='zombie') return;
+      const d=Math.hypot(b.x-x,b.y-y);
+      if(d<bestD){bestD=d;bestBot=b;}
+    });
+    if(bestBot){
+      bestBot.hp-=3;
+      lootAnims.push({x:bestBot.x,y:bestBot.y,team:ownerTeam,type:'clash',age:0});
+      spawnExplosion(bestBot.x,bestBot.y,2,200,200,180);
+      if(bestBot.hp<=0) bots=bots.filter(b=>b!==bestBot);
+    }
+  }
 }
 
 // ── ZOMBIE WAVE ───────────────────────────────────────────────

@@ -39,6 +39,11 @@ function playSound(type){
       o.frequency.setValueAtTime(100,now);o.frequency.setValueAtTime(65,now+0.15);
       g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.3);
       o.start(now);o.stop(now+0.3);
+    } else if(type==='siege'){
+      o.type='square';
+      o.frequency.setValueAtTime(80,now);o.frequency.exponentialRampToValueAtTime(45,now+0.4);
+      g.gain.setValueAtTime(0.18,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.5);
+      o.start(now);o.stop(now+0.5);
     }
   }catch(e){}
 }
@@ -82,6 +87,7 @@ function loop(ts){
   if(tick%4===0) updateArmies();
   if(tick%3===0) updateRaids();
   if(tick%5===0) updatePlague();
+  if(tick%25===0) updateTowers();
   if(tick%60===0) updateWeather();
   if(tick%30===0) updateCastles();
   if(tick%600===0&&tick>0) spawnZombieWave();
@@ -340,6 +346,7 @@ function getToolIcon(id){
     bomb:'💣',fire:'🔥',meteor:'☄️',flood:'💧',plague:'☠️',lightning:'⚡',
     house:'🏠',wall:'🧱',gate:'🚪',
     vil_red:'🔴',vil_blue:'🔵',vil_green:'🟢',vil_gold:'🟡',
+    spy_red:'🕵',spy_blue:'🕵',spy_green:'🕵',spy_gold:'🕵',
   };
   return icons[id]||'❓';
 }
