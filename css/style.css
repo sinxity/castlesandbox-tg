@@ -68,3 +68,20 @@
   #bval{font-size:11px;font-weight:700;color:#fff;min-width:18px;text-align:right}
 
   #hint{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);color:#fff;font-size:11px;padding:5px 10px;pointer-events:none;opacity:0;transition:opacity .2s;z-index:20;text-align:center}
+
+  /* CASTLE PANEL */
+  #castle-panel{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(10,20,40,0.97),rgba(5,12,28,0.99));border-top:1px solid rgba(255,255,255,0.15);border-radius:14px 14px 0 0;padding:0 0 env(safe-area-inset-bottom,0px);z-index:55;transform:translateY(100%);transition:transform .25s cubic-bezier(.22,.68,0,1.2);pointer-events:auto;box-shadow:0 -4px 24px rgba(0,0,0,0.7)}
+  #castle-panel.open{transform:translateY(0)}
+  #cp-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;border-bottom:0.5px solid rgba(255,255,255,0.1)}
+  #cp-title{font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px}
+  #cp-close{background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:26px;height:26px;color:rgba(255,255,255,0.6);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+  #cp-close:active{background:rgba(255,255,255,0.2)}
+  #cp-rows{padding:6px 14px 10px;display:flex;flex-direction:column;gap:4px}
+  .cp-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,0.06)}
+  .cp-row:last-child{border-bottom:none}
+  .cp-row>span{flex:1;font-size:11px;color:rgba(255,255,255,0.55)}
+  .cp-row>b{min-width:36px;text-align:right;font-size:12px;font-weight:700;color:#ffd700;text-shadow:0 0 6px rgba(255,215,0,0.4)}
+  .cp-btn{background:linear-gradient(180deg,#2a7a3a,#1a5828);border:1px solid #3aaa4a;border-radius:6px;color:#7effa0;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;flex-shrink:0;min-width:42px;text-align:center}
+  .cp-btn:active{opacity:.7;transform:scale(0.95)}
+  .cp-btn.upgrade{background:linear-gradient(180deg,#b87e00,#7a5000);border-color:#ffd700;color:#ffd700;font-size:10px;min-width:90px}
+  .cp-btn:disabled{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.1);color:rgba(255,255,255,0.25);cursor:default}

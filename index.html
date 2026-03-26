@@ -50,6 +50,15 @@ window.Telegram={WebApp:{ready:function(){},expand:function(){},setHeaderColor:f
       <div id="victory-sub">Все замки покорены</div>
       <button onclick="resetWorld()">🌍 Новая игра</button>
     </div>
+
+    <!-- Castle info panel (tap on castle) -->
+    <div id="castle-panel">
+      <div id="cp-header">
+        <span id="cp-title">🏰 Замок</span>
+        <button id="cp-close" onclick="closeCastlePanel()">✕</button>
+      </div>
+      <div id="cp-rows"></div>
+    </div>
   </div>
 
   <div id="bot">

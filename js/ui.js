@@ -97,7 +97,7 @@ function getTouchDist(t){return Math.hypot(t[1].clientX-t[0].clientX,t[1].client
 function getTouchMid(t){return{x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2};}
 
 // UI elements inside #cw that should NOT be intercepted by the canvas touch handler
-function isUITouch(e){return!!e.target.closest('#topbar,#minimap-wrap,#victory-overlay,#loading');}
+function isUITouch(e){return!!e.target.closest('#topbar,#minimap-wrap,#victory-overlay,#loading,#castle-panel');}
 
 function setupEvents(){
   // Mini-map click to navigate
@@ -112,6 +112,8 @@ function setupEvents(){
     camY=my/mmEl.height*H*camZ-wrap.clientHeight/2;
     clampCam();
   });
+
+  let tapStartTime=0,tapStartX=0,tapStartY=0;
 
   wrap.addEventListener('touchstart',e=>{
     // CRITICAL FIX: don't intercept touches on topbar buttons or minimap
@@ -129,6 +131,7 @@ function setupEvents(){
       panStartCamX=camX;panStartCamY=camY;
     } else if(e.touches.length===1&&!isPinching){
       const t=e.touches[0];
+      tapStartTime=Date.now();tapStartX=t.clientX;tapStartY=t.clientY;
       if(curTool===null){
         // Pan mode (default — no tool selected)
         panStartX=t.clientX;panStartY=t.clientY;
@@ -178,11 +181,24 @@ function setupEvents(){
     if(isUITouch(e)) return;
     e.preventDefault();
     if(e.touches.length<2){isPinching=false;lastPinchDist=0;}
-    if(e.touches.length===0){isDrawing=false;lastPaintPos={x:-99,y:-99};}
+    if(e.touches.length===0){
+      isDrawing=false;lastPaintPos={x:-99,y:-99};
+      // Detect tap: short duration + minimal movement → check for castle
+      if(curTool===null&&!isPinching&&e.changedTouches.length>0){
+        const t=e.changedTouches[0];
+        const moved=Math.hypot(t.clientX-tapStartX,t.clientY-tapStartY);
+        if(moved<12&&Date.now()-tapStartTime<350){
+          const pos=screenToCanvas(t.clientX,t.clientY);
+          checkCastleTap(pos.x,pos.y);
+        }
+      }
+    }
   },{passive:false});
 
+  let mouseDownX=0,mouseDownY=0;
   wrap.addEventListener('mousedown',e=>{
     initAudio();
+    mouseDownX=e.clientX;mouseDownY=e.clientY;
     if(curTool===null){
       panStartX=e.clientX;panStartY=e.clientY;panStartCamX=camX;panStartCamY=camY;
       isDrawing=true;
@@ -201,7 +217,13 @@ function setupEvents(){
       paintAt(e.clientX,e.clientY,false);
     }
   });
-  wrap.addEventListener('mouseup',()=>{isDrawing=false;});
+  wrap.addEventListener('mouseup',e=>{
+    isDrawing=false;
+    if(curTool===null&&Math.hypot(e.clientX-mouseDownX,e.clientY-mouseDownY)<6){
+      const pos=screenToCanvas(e.clientX,e.clientY);
+      checkCastleTap(pos.x,pos.y);
+    }
+  });
   wrap.addEventListener('mouseleave',()=>{isDrawing=false;});
   wrap.addEventListener('wheel',e=>{
     e.preventDefault();
@@ -213,6 +235,93 @@ function setupEvents(){
     camY=my+(camY-my)*newZ/camZ;
     camZ=newZ;clampCam();showZoomIndicator();
   },{passive:false});
+}
+
+// ── CASTLE PANEL ──────────────────────────────────────────────
+let activeCastlePanel=null;
+
+function checkCastleTap(cx,cy){
+  const R=40/camZ;
+  const hit=castles.find(c=>{
+    const ccx=Math.round(c.nx*W),ccy=Math.round(c.ny*H);
+    return Math.hypot(cx-ccx,cy-ccy)<R;
+  });
+  if(hit) openCastlePanel(hit);
+  else closeCastlePanel();
+}
+
+function openCastlePanel(c){
+  activeCastlePanel=c;
+  const teamEmoji={red:'🔴',blue:'🔵',green:'🟢',gold:'🟡',zombie:'💀'}[c.team]||'🏰';
+  const lv=c.level||1;
+  const r=RES[c.team]||{};
+  const workerCount=bots.filter(b=>b.team===c.team&&!b.isKnight).length;
+  const knightCount=bots.filter(b=>b.team===c.team&&b.isKnight).length;
+  const canUpgrade=lv<5;
+  const nextName=canUpgrade?(LEVEL_DATA[lv+1]?.name||''):'';
+  document.getElementById('cp-title').textContent=teamEmoji+' '+TRAITS[c.team]?.label+' · '+(LEVEL_DATA[lv]?.name||'Замок')+' ур.'+lv;
+  const rows=document.getElementById('cp-rows');
+  rows.innerHTML=`
+    <div class="cp-row"><span>👥 Жители</span><b>${workerCount}</b><button class="cp-btn" onclick="cpAdd('workers')">+10</button></div>
+    <div class="cp-row"><span>⚔️ Рыцари</span><b>${knightCount}</b><button class="cp-btn" onclick="cpAdd('knights')">+5</button></div>
+    <div class="cp-row"><span>🪵 Дерево</span><b>${r.wood||0}</b><button class="cp-btn" onclick="cpAdd('wood')">+100</button></div>
+    <div class="cp-row"><span>🪨 Камень</span><b>${r.stone||0}</b><button class="cp-btn" onclick="cpAdd('stone')">+100</button></div>
+    <div class="cp-row"><span>⚙️ Железо</span><b>${r.iron||0}</b><button class="cp-btn" onclick="cpAdd('iron')">+100</button></div>
+    <div class="cp-row"><span>⬆️ Уровень ${lv}/5</span><b></b><button class="cp-btn upgrade" onclick="cpUpgrade()" ${canUpgrade?'':'disabled'}>${canUpgrade?'→ '+nextName:'Максимум'}</button></div>
+  `;
+  document.getElementById('castle-panel').classList.add('open');
+}
+
+function closeCastlePanel(){
+  activeCastlePanel=null;
+  document.getElementById('castle-panel').classList.remove('open');
+}
+
+function cpAdd(type){
+  if(!activeCastlePanel) return;
+  const c=activeCastlePanel;
+  const cx=Math.round(c.nx*W),cy=Math.round(c.ny*H);
+  if(type==='workers'){
+    let spawned=0;
+    for(let dy=-20;dy<=20&&spawned<10;dy++) for(let dx=-20;dx<=20&&spawned<10;dx++){
+      const nx2=cx+dx,ny2=cy+dy;
+      if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+      if(isLand(nx2,ny2)&&Math.random()<0.18){
+        bots.push({x:nx2,y:ny2,team:c.team,hp:5,maxhp:5,
+          timer:Math.floor(Math.random()*20),isKnight:false,
+          carrying:null,res:0,homeX:cx,homeY:cy,state:'seek'});
+        spawned++;
+      }
+    }
+  } else if(type==='knights'){
+    let spawned=0;
+    for(let dy=-15;dy<=15&&spawned<5;dy++) for(let dx=-15;dx<=15&&spawned<5;dx++){
+      const nx2=cx+dx,ny2=cy+dy;
+      if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+      if(isLand(nx2,ny2)&&Math.random()<0.28){
+        bots.push({x:nx2,y:ny2,team:c.team,hp:20,maxhp:20,
+          timer:Math.floor(Math.random()*20),isKnight:true,
+          carrying:null,res:0,homeX:cx,homeY:cy,state:'seek'});
+        spawned++;
+      }
+    }
+  } else {
+    const r=RES[c.team];
+    if(r) r[type]=(r[type]||0)+100;
+  }
+  openCastlePanel(c);
+}
+
+function cpUpgrade(){
+  if(!activeCastlePanel) return;
+  const c=activeCastlePanel;
+  const lv=c.level||1;
+  if(lv>=5) return;
+  c.level=lv+1;
+  c.xp=LEVEL_XP[c.level]||0;
+  logEvent('⬆️ '+({red:'🔴',blue:'🔵',green:'🟢',gold:'🟡'}[c.team]||'')+'→ '+LEVEL_DATA[c.level].name);
+  playSound('level');
+  openCastlePanel(c);
 }
 
 // ── TOOLS UI ──────────────────────────────────────────────────
