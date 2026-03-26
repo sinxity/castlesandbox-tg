@@ -141,6 +141,20 @@ function initGridFromMap(){
       }
     }
   });
+  // Resource scatter pass — populates map with natural resources
+  for(let ry=16;ry<H-16;ry+=16) for(let rx=16;rx<W-16;rx+=16){
+    const cell=grid[ry]&&grid[ry][rx];
+    if(!cell||cell.type==='water'||cell.type==='mountain'||cell.type==='snow') continue;
+    const rnx=rx/W,rny=ry/H;
+    const ms=getMtn(rnx,rny,W);
+    const rng=hash(rx*3+137+(mapSeed||0),ry*7+251+(mapSeed||0));
+    if(cell.type==='rock'){
+      if(ms>0.12&&ms<0.5&&rng%10<2) cell.type='ore';
+      else if(ms>0.12&&rng%20<1) cell.type='gold';
+    } else if((cell.type==='grass'||cell.type==='rock')&&ms>0.3&&rng%28<1){
+      cell.type='crystal';
+    }
+  }
 }
 
 // ── TERRITORY ─────────────────────────────────────────────────

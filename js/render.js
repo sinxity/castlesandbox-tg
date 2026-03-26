@@ -41,116 +41,183 @@ function drawCastle(c){
   const wallCol=isDefeated?'#554444':LEVEL_COLORS.wall[li];
   const wallHi=isDefeated?'#665555':LEVEL_COLORS.wallHi[li];
   const keepCol=isDefeated?'#553333':LEVEL_COLORS.keep[li];
-  // Scale castle size with level
-  const S=8+lv*2; // lv1=10, lv2=12, lv3=14, lv4=16, lv5=18
+  const S=12+lv*4; // lv1=16, lv2=20, lv3=24, lv4=28, lv5=32
 
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.3)';
-  ctx.fillRect(cx-S-3,cy-S-1,S*2+8,S*2+8);
+  // Outer ground shadow / moat
+  ctx.fillStyle='rgba(0,0,0,0.35)';
+  ctx.fillRect(cx-S-6,cy-S-6,S*2+12,S*2+12);
+  ctx.fillStyle=isDefeated?'rgba(20,10,10,0.6)':'rgba(10,25,60,0.55)';
+  ctx.fillRect(cx-S-5,cy-S-5,S*2+10,5);
+  ctx.fillRect(cx-S-5,cy+S,S*2+10,5);
+  ctx.fillRect(cx-S-5,cy-S-5,5,S*2+10);
+  ctx.fillRect(cx+S,cy-S-5,5,S*2+10);
 
-  // Outer walls - scale with level
+  // Cobblestone courtyard ground
+  ctx.fillStyle=isDefeated?'#443333':'#5a4a38';
+  ctx.fillRect(cx-S+3,cy-S+3,S*2-6,S*2-6);
+  // Courtyard grid lines
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  const cg=Math.max(4,Math.round(S/4));
+  for(let gi=cx-S+3;gi<cx+S-3;gi+=cg) ctx.fillRect(gi,cy-S+3,1,S*2-6);
+  for(let gi=cy-S+3;gi<cy+S-3;gi+=cg) ctx.fillRect(cx-S+3,gi,S*2-6,1);
+
+  // Outer walls
   ctx.fillStyle=wallCol;
-  ctx.fillRect(cx-S,cy-S,S*2,3);
-  ctx.fillRect(cx-S,cy+S-3,S*2,3);
-  ctx.fillRect(cx-S,cy-S,3,S*2);
-  ctx.fillRect(cx+S-3,cy-S,3,S*2);
-  // Wall highlight
+  ctx.fillRect(cx-S,cy-S,S*2,4);
+  ctx.fillRect(cx-S,cy+S-4,S*2,4);
+  ctx.fillRect(cx-S,cy-S,4,S*2);
+  ctx.fillRect(cx+S-4,cy-S,4,S*2);
+  // Wall inner face (slightly darker)
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.fillRect(cx-S+4,cy-S+2,S*2-8,2);
+  ctx.fillRect(cx-S+2,cy-S+4,2,S*2-8);
+  // Wall highlight (top/left edges catch light)
   ctx.fillStyle=wallHi;
   ctx.fillRect(cx-S,cy-S,S*2,1);
   ctx.fillRect(cx-S,cy-S,1,S*2);
 
-  // Crenellations - more at higher levels
+  // Crenellations
   ctx.fillStyle=wallHi;
-  const crenStep=Math.max(3,5-lv);
-  for(let i=-(S-2);i<=S-2;i+=crenStep){
-    ctx.fillRect(cx+i,cy-S-3,2,4);
-    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(cx+i,cy-S-3,1,4);
+  const crenStep=Math.max(4,6-lv);
+  for(let i=cx-S;i<cx+S;i+=crenStep){
+    ctx.fillRect(i,cy-S-4,3,5);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(i+2,cy-S-4,1,5);
+    ctx.fillStyle=wallHi;
+  }
+  for(let i=cy-S;i<cy+S;i+=crenStep){
+    ctx.fillRect(cx-S-4,i,5,3);
+    ctx.fillRect(cx+S-1,i,5,3);
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.fillRect(cx-S-4,i+2,5,1);ctx.fillRect(cx+S-1,i+2,5,1);
     ctx.fillStyle=wallHi;
   }
 
-  // Corner towers - grow with level
-  const tw=5+lv,th=6+lv;
-  const toff=S-1;
-  [[-toff,-toff],[toff-tw+1,-toff],[-toff,toff-th+1],[toff-tw+1,toff-th+1]].forEach(([tx,ty])=>{
-    ctx.fillStyle=isDefeated?'#664444':'#9999aa';ctx.fillRect(cx+tx,cy+ty,tw,th);
-    ctx.fillStyle=isDefeated?'#775555':wallHi;ctx.fillRect(cx+tx,cy+ty,tw,2);
-    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(cx+tx+tw-1,cy+ty,1,th);
+  // Corner towers — bigger and more detailed
+  const tw=7+lv,th=9+lv;
+  const toff=S-2;
+  [[-toff,-toff],[toff-tw+2,-toff],[-toff,toff-th+2],[toff-tw+2,toff-th+2]].forEach(([tx2,ty2])=>{
+    // Tower body
+    ctx.fillStyle=isDefeated?'#664444':'#9999aa';
+    ctx.fillRect(cx+tx2,cy+ty2,tw,th);
+    // Top highlight
+    ctx.fillStyle=isDefeated?'#775555':wallHi;
+    ctx.fillRect(cx+tx2,cy+ty2,tw,2);
+    // Right shadow
+    ctx.fillStyle='rgba(0,0,0,0.25)';
+    ctx.fillRect(cx+tx2+tw-1,cy+ty2,1,th);
+    ctx.fillRect(cx+tx2,cy+ty2+th-1,tw,1);
+    // Arrow slit
+    ctx.fillStyle='rgba(0,0,0,0.7)';
+    ctx.fillRect(cx+tx2+Math.floor(tw/2)-1,cy+ty2+2,2,Math.floor(th*0.55));
+    // Crenellations on tower top
     if(!isDefeated){
-      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(cx+tx+1,cy+ty-4,1,4);
-      ctx.fillStyle=tc;ctx.fillRect(cx+tx+2,cy+ty-4,3,2);
+      ctx.fillStyle=wallHi;
+      ctx.fillRect(cx+tx2,cy+ty2-3,2,3);
+      ctx.fillRect(cx+tx2+tw-2,cy+ty2-3,2,3);
+    }
+    // Team flag
+    if(!isDefeated){
+      ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx+tx2+1,cy+ty2-6,1,5);
+      ctx.fillStyle=tc;ctx.fillRect(cx+tx2+2,cy+ty2-6,4,3);
+      ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx+tx2+2,cy+ty2-6,2,1);
     }
   });
 
-  // Keep center - grows with level
-  const ks=4+lv;
+  // Keep / donjon — center structure
+  const ks=5+lv;
+  // Keep shadow
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(cx-ks+2,cy-ks+2,ks*2+2,ks*2+2);
+  // Keep walls
   ctx.fillStyle=keepCol;ctx.fillRect(cx-ks,cy-ks,ks*2,ks*2);
-  ctx.fillStyle=isDefeated?'#442222':'#50508a';ctx.fillRect(cx-ks+2,cy,ks*2-4,ks);
-  ctx.fillStyle='#111122';ctx.fillRect(cx-1,cy+1,3,ks);
+  // Keep inner arch/door shadow
+  ctx.fillStyle=isDefeated?'#442222':'#3a3a6a';
+  ctx.fillRect(cx-ks+2,cy,ks*2-4,ks);
+  // Keep door
+  ctx.fillStyle='#0d0a05';ctx.fillRect(cx-2,cy+2,5,ks-1);
+  ctx.fillStyle='rgba(180,140,60,0.6)';ctx.fillRect(cx+1,cy+Math.floor(ks*0.5),1,2); // door handle
+  // Keep windows (arrow slits)
   ctx.fillStyle='rgba(150,200,255,0.5)';
-  ctx.fillRect(cx-ks+1,cy-ks+2,2,2);ctx.fillRect(cx+ks-3,cy-ks+2,2,2);
-  ctx.fillStyle=isDefeated?'#553333':wallHi;ctx.fillRect(cx-ks,cy-ks,ks*2,2);
-
-  // Extra details at higher levels
+  ctx.fillRect(cx-ks+2,cy-ks+3,2,3);ctx.fillRect(cx+ks-4,cy-ks+3,2,3);
   if(lv>=3){
-    ctx.fillStyle='rgba(0,0,0,0.15)';
-    ctx.fillRect(cx-ks-3,cy-ks-3,ks*2+6,2);
-    ctx.fillRect(cx-ks-3,cy+ks+1,ks*2+6,2);
+    ctx.fillRect(cx-ks+2,cy-3,2,3);ctx.fillRect(cx+ks-4,cy-3,2,3);
   }
-  if(lv>=4){
-    ctx.fillStyle='rgba(30,60,120,0.3)';
-    ctx.fillRect(cx-S-4,cy-S-4,S*2+8,3);
-    ctx.fillRect(cx-S-4,cy+S+1,S*2+8,3);
-    ctx.fillRect(cx-S-4,cy-S-4,3,S*2+8);
-    ctx.fillRect(cx+S+1,cy-S-4,3,S*2+8);
-  }
-  if(lv>=5){
-    ctx.fillStyle='#d4ac0d';
-    ctx.fillRect(cx,cy-S-8,2,6);
-    ctx.fillRect(cx-S-1,cy-S/2,1,4);
-    ctx.fillRect(cx+S,cy-S/2,1,4);
-  }
+  // Keep top highlight
+  ctx.fillStyle=isDefeated?'#553333':wallHi;ctx.fillRect(cx-ks,cy-ks,ks*2,2);
+  ctx.fillRect(cx-ks,cy-ks,1,ks*2);
 
-  // Main flag
+  // Keep crenellations
   if(!isDefeated){
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(cx,cy-ks-8,1,7);
-    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-ks-8,6,4);
-    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(cx+1,cy-ks-8,2,1);
-  } else {
-    ctx.fillStyle='#555';ctx.fillRect(cx,cy-ks-6,1,5);
+    ctx.fillStyle=wallHi;
+    for(let i=cx-ks;i<cx+ks;i+=3){
+      ctx.fillRect(i,cy-ks-3,2,4);
+      ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(i+1,cy-ks-3,1,4);
+      ctx.fillStyle=wallHi;
+    }
   }
 
-  // Level indicator ring + XP arc
+  // Lv4+: outer dry moat / second wall ring
+  if(lv>=4&&!isDefeated){
+    ctx.fillStyle='rgba(20,40,100,0.3)';
+    ctx.fillRect(cx-S-8,cy-S-8,S*2+16,4);
+    ctx.fillRect(cx-S-8,cy+S+4,S*2+16,4);
+    ctx.fillRect(cx-S-8,cy-S-8,4,S*2+16);
+    ctx.fillRect(cx+S+4,cy-S-8,4,S*2+16);
+    // Second wall
+    ctx.fillStyle=wallCol;ctx.globalAlpha=0.6;
+    ctx.fillRect(cx-S-8,cy-S-8,S*2+16,2);
+    ctx.fillRect(cx-S-8,cy-S-8,2,S*2+16);
+    ctx.globalAlpha=1;
+  }
+
+  // Lv5: golden spire on keep
+  if(lv>=5&&!isDefeated){
+    ctx.fillStyle='#d4ac0d';
+    ctx.fillRect(cx-1,cy-ks-8,3,6);
+    ctx.fillStyle='#ffe040';ctx.fillRect(cx,cy-ks-8,1,2);
+  }
+
+  // Main flag on keep
+  if(!isDefeated){
+    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(cx,cy-ks-10,1,9);
+    ctx.fillStyle=tc;ctx.fillRect(cx+1,cy-ks-10,7,4);
+    ctx.fillStyle='rgba(255,255,255,0.35)';ctx.fillRect(cx+1,cy-ks-10,3,1);
+  } else {
+    ctx.fillStyle='#555';ctx.fillRect(cx,cy-ks-7,1,6);
+    ctx.fillStyle='#888';ctx.fillRect(cx+1,cy-ks-7,5,3);
+  }
+
+  // XP arc
   const xpPct=Math.min(1,(c.xp||0)/LEVEL_XP[Math.min(lv,4)]);
-  ctx.beginPath();ctx.arc(cx,cy,S+4,0-Math.PI/2,0-Math.PI/2+Math.PI*2*xpPct);
+  ctx.beginPath();ctx.arc(cx,cy,S+5,0-Math.PI/2,0-Math.PI/2+Math.PI*2*xpPct);
   ctx.strokeStyle=isDefeated?'rgba(150,50,50,0.5)':tc;
   ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;
 
   // Player faction pulsing glow
   if(playerTeam&&c.team===playerTeam&&!isDefeated){
     const pulse=Math.sin(tick*0.12)*0.5+0.5;
-    ctx.beginPath();ctx.arc(cx,cy,S+8,0,Math.PI*2);
-    ctx.strokeStyle=`rgba(255,255,255,${(0.25+pulse*0.55).toFixed(2)})`;
+    ctx.beginPath();ctx.arc(cx,cy,S+10,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,255,255,${(0.2+pulse*0.5).toFixed(2)})`;
     ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;
   }
 
   // Level badge
   const ld=LEVEL_DATA[lv];
-  ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(cx-14,cy+S+2,28,10);
-  ctx.fillStyle=tc;ctx.font='bold 6px monospace';ctx.textAlign='center';
-  ctx.fillText('Lv'+lv+' '+(ld?ld.name:''),cx,cy+S+10);
+  ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(cx-16,cy+S+4,32,12);
+  ctx.fillStyle=tc;ctx.font='bold 7px monospace';ctx.textAlign='center';
+  ctx.fillText('Lv'+lv+' '+(ld?ld.name:''),cx,cy+S+13);
   ctx.textAlign='left';
 
-  // Warehouse
+  // Warehouse (resource display)
   if(!isDefeated){
-    const wx=cx+22,wy=cy+2;
-    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(wx+1,wy+1,12,10);
-    ctx.fillStyle='#7a5a2a';ctx.fillRect(wx,wy,12,10);
-    ctx.fillStyle='#9a7a3a';ctx.fillRect(wx,wy,12,3);
-    ctx.fillStyle='#3a2010';ctx.fillRect(wx+4,wy+5,4,5);
-    ctx.fillStyle='rgba(255,240,180,0.6)';ctx.fillRect(wx+1,wy+4,2,2);
+    const wx=cx+S+6,wy=cy-8;
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(wx+1,wy+1,14,12);
+    ctx.fillStyle='#8a6a2a';ctx.fillRect(wx,wy,14,12);
+    ctx.fillStyle='#aa8a3a';ctx.fillRect(wx,wy,14,3);
+    ctx.fillStyle='#3a2010';ctx.fillRect(wx+5,wy+6,4,6);
+    ctx.fillStyle='rgba(255,240,180,0.55)';ctx.fillRect(wx+1,wy+4,3,3);
     const r=RES[c.team];
     if(r){
-      ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(wx-1,wy-11,36,10);
+      ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(wx-2,wy-13,44,12);
       ctx.font='bold 6px monospace';ctx.fillStyle='#aef';ctx.textAlign='left';
       ctx.fillText('W:'+r.wood+' S:'+r.stone+' I:'+r.iron,wx,wy-4);
     }
@@ -256,25 +323,44 @@ function getMountainColor(x,y){
   const isW=grid[y]&&grid[y][x-3]&&(grid[y][x-3].type==='mountain'||grid[y][x-3].type==='snow');
   const isE=grid[y]&&grid[y][x+3]&&(grid[y][x+3].type==='mountain'||grid[y][x+3].type==='snow');
   let base=[128,128,145];
-  if(!isN&&isS){base=[175,178,198];}
-  else if(isN&&!isS){base=[90,90,108];}
-  else if(!isW&&isE){base=[155,158,178];}
-  else if(isW&&!isE){base=[100,100,118];}
-  const n=(hash(x>>1,y>>1)&7)-4;
+  if(!isN&&isS){base=[192,195,215];}      // top face — bright
+  else if(isN&&!isS){base=[72,72,90];}    // bottom face — deep shadow
+  else if(!isW&&isE){base=[162,165,185];} // left face — medium
+  else if(isW&&!isE){base=[92,92,110];}   // right face — shadow
+  // Cracks: occasional very dark pixels for jagged look
+  const crack=(hash(x*3+7,y*3+11)&63)<3;
+  if(crack) return[Math.max(0,base[0]-45),Math.max(0,base[1]-45),Math.max(0,base[2]-40)];
+  // Bright fleck for rocky highlights
+  const fleck=(hash(x*5+3,y*5+9)&127)<2;
+  if(fleck) return[Math.min(255,base[0]+50),Math.min(255,base[1]+50),Math.min(255,base[2]+45)];
+  const n=(hash(x>>1,y>>1)&15)-8;
+  const n2=(hash(x*2+1,y*2+3)&7)-4;
   return[
-    Math.max(0,Math.min(255,base[0]+n)),
-    Math.max(0,Math.min(255,base[1]+n)),
-    Math.max(0,Math.min(255,base[2]+n))
+    Math.max(0,Math.min(255,base[0]+n+n2)),
+    Math.max(0,Math.min(255,base[1]+n+n2)),
+    Math.max(0,Math.min(255,base[2]+n+n2))
   ];
 }
 
 function getSnowColor(x,y){
-  const pattern=[[235,242,255],[242,248,255],[228,236,252],[245,250,255],[232,240,255],[238,245,255],[225,234,250],[240,247,255],[235,242,255]];
-  const tx=(x/3|0)%3,ty=(y/3|0)%3;
-  const idx=(ty*3+tx)%pattern.length;
+  const nearRock=
+    (grid[y+2]&&grid[y+2][x]&&grid[y+2][x].type==='rock')||
+    (grid[y]&&grid[y][x+2]&&grid[y][x+2].type==='rock')||
+    (grid[y]&&grid[y][x-2]&&grid[y][x-2].type==='rock');
   const n=(hash(x,y)&7)-4;
-  const c=pattern[idx];
-  return[Math.min(255,c[0]+n),Math.min(255,c[1]+n),Math.min(255,c[2]+n)];
+  const n2=(hash(x>>1,y>>1)&3)-1;
+  if(nearRock){
+    const mix=(hash(x*5+1,y*5+3)&7)<4;
+    if(mix) return[Math.min(255,170+n),Math.min(255,172+n),Math.min(255,190+n)];
+  }
+  const pattern=[
+    [235,242,255],[245,250,255],[228,238,255],
+    [242,248,255],[232,240,255],[240,247,255],
+    [225,234,252],[238,245,255],[235,242,255]
+  ];
+  const tx=(x/3|0)%3,ty=(y/3|0)%3;
+  const c=pattern[ty*3+tx];
+  return[Math.min(255,c[0]+n+n2),Math.min(255,c[1]+n+n2),Math.min(255,c[2]+n+n2)];
 }
 
 // ── TERRAIN RENDER ────────────────────────────────────────────
@@ -382,22 +468,24 @@ function buildTerrainCache(){
     }
   }
 
+  // Terrain edge blending — type-aware darkening/lightening
   for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
-    const gx=x,gy=y;
-    const t=grid[gy]&&grid[gy][gx]?grid[gy][gx].type:'water';
-    if(t==='fire'||t==='lava') continue;
-    const tn=grid[Math.max(0,gy-1)]&&grid[Math.max(0,gy-1)][gx]?grid[Math.max(0,gy-1)][gx].type:t;
-    const ts=grid[Math.min(H-1,gy+1)]&&grid[Math.min(H-1,gy+1)][gx]?grid[Math.min(H-1,gy+1)][gx].type:t;
-    const tw=grid[gy]&&grid[gy][Math.max(0,gx-1)]?grid[gy][Math.max(0,gx-1)].type:t;
-    const te=grid[gy]&&grid[gy][Math.min(W-1,gx+1)]?grid[gy][Math.min(W-1,gx+1)].type:t;
-    if(tn!==t||ts!==t||tw!==t||te!==t){
-      const idx=(y*W+x)*4;
-      if(d[idx+3]===255){
-        d[idx]=Math.max(0,d[idx]-20);
-        d[idx+1]=Math.max(0,d[idx+1]-20);
-        d[idx+2]=Math.max(0,d[idx+2]-20);
-      }
-    }
+    const t=grid[y]&&grid[y][x]?grid[y][x].type:'water';
+    if(t==='fire'||t==='lava'||t==='water') continue;
+    const tn=grid[y-1]&&grid[y-1][x]?grid[y-1][x].type:t;
+    const ts=grid[y+1]&&grid[y+1][x]?grid[y+1][x].type:t;
+    const tw=grid[y]&&grid[y][x-1]?grid[y][x-1].type:t;
+    const te=grid[y]&&grid[y][x+1]?grid[y][x+1].type:t;
+    if(tn===t&&ts===t&&tw===t&&te===t) continue;
+    const idx=(y*W+x)*4;
+    if(d[idx+3]!==255) continue;
+    // Top edge brighter (light hits top), bottom edge darker (shadow)
+    const topEdge=(tn!==t);
+    const bottomEdge=(ts!==t);
+    const adj=topEdge?18:bottomEdge?-25:-18;
+    d[idx]=Math.max(0,Math.min(255,d[idx]+adj));
+    d[idx+1]=Math.max(0,Math.min(255,d[idx+1]+adj));
+    d[idx+2]=Math.max(0,Math.min(255,d[idx+2]+adj));
   }
 
   tc.putImageData(img,0,0);
@@ -738,51 +826,64 @@ function drawCactus(x,y){
 }
 
 function drawHouse(x,y,owner){
-  const rc=owner?{
+  const rc=owner?({
     red:['#882222','#aa2a2a','#cc3333'],
     blue:['#1a4a99','#2255bb','#3366dd'],
     green:['#1a6632','#1e8449','#27ae60'],
     gold:['#8a6010','#b8860b','#d4ac0d'],
-  }[owner]||['#1a4a99','#2255bb','#3366dd']:['#1a4a99','#2255bb','#3366dd'];
-  // Shadow
-  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+2,y+20,20,3);
-  // Foundation / base walls
-  ctx.fillStyle='#7a6050';ctx.fillRect(x,y+13,24,7);
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+21,y+13,3,7);
-  // Wall body
-  ctx.fillStyle='#d4bc90';ctx.fillRect(x+1,y+9,22,5);
-  ctx.fillStyle='#b89a70';ctx.fillRect(x+22,y+9,2,5);
-  ctx.fillStyle='#8a5a20';ctx.fillRect(x+1,y+12,22,1);
-  // Roof layers
+  }[owner]||['#1a4a99','#2255bb','#3366dd']):['#554433','#6a5544','#7a6655'];
+  // Drop shadow
+  ctx.fillStyle='rgba(0,0,0,0.32)';ctx.fillRect(x+3,y+21,20,3);
+  // Stone foundation
+  ctx.fillStyle='#7a6a58';ctx.fillRect(x,y+14,24,7);
+  ctx.fillStyle='#6a5a48';ctx.fillRect(x+21,y+14,3,7);
+  // Foundation stone lines
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.fillRect(x,y+17,24,1);ctx.fillRect(x+12,y+14,1,7);
+  // Wall body - plaster with wooden beams
+  ctx.fillStyle='#d8c096';ctx.fillRect(x+1,y+9,22,6);
+  // Wooden beam cross
+  ctx.fillStyle='#6a3e10';ctx.fillRect(x+1,y+9,22,1);ctx.fillRect(x+1,y+13,22,1);
+  ctx.fillStyle='#6a3e10';ctx.fillRect(x+11,y+9,1,5);
+  // Right wall shadow
+  ctx.fillStyle='#a89070';ctx.fillRect(x+22,y+9,2,5);
+  // Roof - layered shingles
   ctx.fillStyle=rc[0];ctx.fillRect(x,y+5,24,5);
   ctx.fillStyle=rc[1];ctx.fillRect(x+1,y+3,22,4);
   ctx.fillStyle=rc[2];ctx.fillRect(x+3,y+1,18,4);
   ctx.fillStyle=rc[2];ctx.fillRect(x+6,y+0,12,3);
-  ctx.fillStyle='rgba(255,255,255,0.25)';ctx.fillRect(x+4,y+1,7,1);
+  // Roof shingle lines
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.fillRect(x,y+7,24,1);ctx.fillRect(x+1,y+5,22,1);ctx.fillRect(x+3,y+3,18,1);
+  // Roof highlight
+  ctx.fillStyle='rgba(255,255,255,0.22)';ctx.fillRect(x+4,y+1,8,1);
+  // Roof shadow (right side)
+  ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fillRect(x+18,y+0,6,5);
+  ctx.fillRect(x+22,y+3,2,7);
+  // Eave shadow
   ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x,y+9,24,1);
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+23,y+3,1,6);
   // Chimney
-  ctx.fillStyle='#7a5540';ctx.fillRect(x+18,y-2,4,6);
-  ctx.fillStyle='#3a2515';ctx.fillRect(x+18,y-2,4,2);
+  ctx.fillStyle='#8a6450';ctx.fillRect(x+17,y-3,5,7);
+  ctx.fillStyle='#3a2010';ctx.fillRect(x+17,y-3,5,2);
+  ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(x+21,y-3,1,7);
   // Door
-  ctx.fillStyle='#2a1808';ctx.fillRect(x+10,y+10,5,10);
+  ctx.fillStyle='#241408';ctx.fillRect(x+10,y+10,5,11);
   ctx.fillStyle='#3a2818';ctx.fillRect(x+10,y+10,5,2);
-  ctx.fillStyle='#cc8822';ctx.fillRect(x+14,y+14,1,2);
-  // Left window
-  ctx.fillStyle='#88ccff';ctx.fillRect(x+2,y+9,5,5);
-  ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fillRect(x+2,y+9,2,2);
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+6,y+9,1,5);ctx.fillRect(x+2,y+13,5,1);
-  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+4,y+9,1,5);
+  ctx.fillStyle='#111';ctx.fillRect(x+10,y+10,1,11);ctx.fillRect(x+14,y+10,1,11);
+  ctx.fillStyle='#cc8822';ctx.fillRect(x+14,y+15,1,2); // door handle
+  // Left window with glass sheen
+  ctx.fillStyle='#6ab8ff';ctx.fillRect(x+2,y+9,5,5);
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(x+2,y+9,2,2);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+4,y+9,1,5);ctx.fillRect(x+2,y+12,5,1);
   // Right window
-  ctx.fillStyle='#88ccff';ctx.fillRect(x+17,y+9,5,5);
-  ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fillRect(x+17,y+9,2,2);
-  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+21,y+9,1,5);ctx.fillRect(x+17,y+13,5,1);
-  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x+19,y+9,1,5);
-  // Flag
+  ctx.fillStyle='#6ab8ff';ctx.fillRect(x+17,y+9,5,5);
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.fillRect(x+17,y+9,2,2);
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(x+21,y+9,1,5);ctx.fillRect(x+17,y+12,5,1);
+  // Team flag
   if(owner&&TC[owner]){
-    ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fillRect(x+12,y-5,1,5);
-    ctx.fillStyle=TC[owner];ctx.fillRect(x+13,y-5,6,3);
-    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(x+13,y-5,2,1);
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(x+13,y-6,1,6);
+    ctx.fillStyle=TC[owner];ctx.fillRect(x+14,y-6,7,4);
+    ctx.fillStyle='rgba(255,255,255,0.35)';ctx.fillRect(x+14,y-6,3,1);
   }
 }
 
