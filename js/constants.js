@@ -32,6 +32,29 @@ function getFst(nx,ny,W){
   }
   return mx;
 }
+function getHill(nx,ny){
+  let mx=0;
+  for(const h of HILLS){
+    const d=Math.hypot(nx-h.c[0],ny-h.c[1]);
+    const s=Math.max(0,1-d/h.r);if(s>mx)mx=s;
+  }
+  return mx;
+}
+function getDesert(nx,ny){
+  let mx=0;
+  for(const d of DESERTS){
+    const dist=Math.hypot(nx-d.c[0],ny-d.c[1]);
+    const s=Math.max(0,1-dist/d.r);if(s>mx)mx=s;
+  }
+  return mx;
+}
+function isInLake(nx,ny){
+  for(const l of LAKES){
+    const d=Math.hypot(nx-l.c[0],ny-l.c[1]);
+    if(d<l.r) return true;
+  }
+  return false;
+}
 
 // ── CONSTANTS ─────────────────────────────────────────────────
 const TC={red:'#e74c3c',blue:'#3498db',green:'#2ecc71',gold:'#f1c40f',zombie:'#8a0a14'};
@@ -61,7 +84,7 @@ const TRAITS={
   gold:{buildSpeed:1,harvestMult:1.2,fightMult:0.9,growMult:1.8,label:'Торговцы'},
 };
 const TCRGB={red:'231,76,60',blue:'52,152,219',green:'46,204,113',gold:'241,196,15',zombie:'138,10,20'};
-const WALKABLE=new Set(['grass','sand','snow','burned','desert','jungle','plague']);
+const WALKABLE=new Set(['grass','sand','snow','burned','desert','jungle','plague','hill']);
 const FLAMMABLE=new Set(['tree','pine','grass','jungle','house','gate']);
 const RESOURCE=new Set(['tree','pine','ore','gold','crystal','cactus']);
 const SOLID=new Set(['rock','mountain','water','lava','wall']);

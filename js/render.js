@@ -363,7 +363,7 @@ function drawBot(b){
 
 // ── TERRAIN DITHERING ─────────────────────────────────────────
 // Color lookup for painted grid cells
-const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',
+const GCOL={water:'#1a6bb5',sand:'#c8a84b',grass:'#3d6e2a',jungle:'#1a6a10',hill:'#6a8a44',
   desert:'#d4a055',rock:'#666676',mountain:'#8a8a9a',snow:'#dde0f0',lava:'#cc3300',
   tree:'#235a14',pine:'#1a4a0a',cactus:'#4a8a30',ore:'#7a4010',gold:'#e6b800',
   crystal:'#6699cc',fire:'#ff4400',burned:'#2a2a2a',plague:'#446611',
@@ -417,6 +417,11 @@ const DITHER_PAL={
   pine:[[14,52,4],[22,68,8],[18,60,6],[25,72,10],[12,48,3],[20,64,7],[16,56,5],[24,70,9],[13,50,4]],
   burned:[[32,28,28],[42,38,38],[38,34,34],[45,40,40],[30,26,26],[40,36,36],[35,31,31],[44,39,39],[33,29,29]],
   plague:[[32,48,10],[42,60,18],[38,55,14],[45,65,20],[30,44,8],[40,58,16],[35,52,12],[44,62,18],[33,50,11]],
+  hill:[
+    [78,108,52],[92,125,62],[82,115,55],
+    [95,128,65],[75,105,50],[88,120,58],
+    [85,118,57],[95,130,64],[78,108,52],
+  ],
 };
 
 function getDitherColor(type,x,y){

@@ -3,9 +3,9 @@ function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
   // Screen size = canvas size, no DPR scaling (fixes stretch bug)
-  // Map is 3x screen size - higher resolution world
-  W=Math.floor(wrap.clientWidth*3);
-  H=Math.floor(wrap.clientHeight*3);
+  // Map is 4x screen size - large world
+  W=Math.floor(wrap.clientWidth*4);
+  H=Math.floor(wrap.clientHeight*4);
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
@@ -44,6 +44,8 @@ function buildMask(onDone){
         for(const poly of POLYS){
           if(polyContains(poly,x,y,W,H)){landMask[y*W+x]=1;break;}
         }
+        // Punch lake holes in landmask
+        if(landMask[y*W+x]===1 && isInLake(x/W,y/H)) landMask[y*W+x]=0;
       } else {
         // Procedural island using fractal noise + edge falloff
         const nx=x/W,ny=y/H;
@@ -82,13 +84,19 @@ function buildMapCache(){
     } else {
       const ms=getMtn(nx,ny,W);
       const fs=getFst(nx,ny,W);
+      const hs=getHill(nx,ny);
+      const ds=getDesert(nx,ny);
       if(ms>0.72||(ny<0.15&&ms>0.2)){r=210+Math.floor(n*20);g2=218+Math.floor(n*18);b=238+Math.floor(n*12);}
       else if(ms>0.2){const t=Math.min(1,(ms-0.2)/0.55);r=Math.round(60+t*78+n*10);g2=Math.round(95+t*45+n*8);b=Math.round(40+t*110+n*12);}
       else{
-        const c1=!isLand(x-1,y)||!isLand(x+1,y)||!isLand(x,y-1)||!isLand(x,y+1);
-        const c2=!c1&&(!isLand(x-2,y)||!isLand(x+2,y)||!isLand(x,y-2)||!isLand(x,y+2));
+        const c1=!isLand(x-1,y)||!isLand(x+1,y)||!isLand(x,y-1)||!isLand(x,y+1)||
+                  !isLand(x-2,y)||!isLand(x+2,y)||!isLand(x,y-2)||!isLand(x,y+2);
+        const c2=!c1&&(!isLand(x-3,y)||!isLand(x+3,y)||!isLand(x,y-3)||!isLand(x,y+3)||
+                        !isLand(x-4,y)||!isLand(x+4,y)||!isLand(x,y-4)||!isLand(x,y+4));
         if(c1||c2){r=Math.round(195+n*20);g2=Math.round(162+n*15);b=Math.round(65+n*12);}
+        else if(ds>0.55){r=Math.round(210+n*18);g2=Math.round(168+n*14);b=Math.round(72+n*10);}
         else if(fs>0.25){const t=Math.min(1,(fs-0.25)/0.5);r=Math.round(55-t*22+n*10);g2=Math.round(100-t*28+n*10);b=Math.round(35-t*12+n*8);}
+        else if(hs>0.45&&ms<0.15){r=Math.round(82+n*12);g2=Math.round(118+n*14);b=Math.round(52+n*10);}
         else{r=Math.round(58+n*14);g2=Math.round(105+n*14);b=Math.round(40+n*10);}
       }
     }
@@ -99,11 +107,17 @@ function buildMapCache(){
     img.data[i+3]=255;
   }
   mc.putImageData(img,0,0);
-  mc.strokeStyle='rgba(40,100,200,0.6)';mc.lineWidth=1.5;
+  mc.strokeStyle='rgba(40,100,200,0.65)';mc.lineWidth=2.5;mc.lineCap='round';mc.lineJoin='round';
   RIVERS.forEach(rv=>{
     mc.beginPath();mc.moveTo(rv[0][0]*W,rv[0][1]*H);
     for(let i=1;i<rv.length;i++) mc.lineTo(rv[i][0]*W,rv[i][1]*H);
     mc.stroke();
+  });
+  // Draw lake outlines
+  mc.strokeStyle='rgba(20,80,180,0.5)';mc.fillStyle='rgba(20,80,180,0.55)';mc.lineWidth=1;
+  LAKES.forEach(l=>{
+    const lx=l.c[0]*W,ly=l.c[1]*H,lr=l.r*Math.min(W,H);
+    mc.beginPath();mc.ellipse(lx,ly,lr*1.3,lr,0,0,Math.PI*2);mc.fill();
   });
   // Sync grid with map so terrain is interactive
   initGridFromMap();
@@ -116,14 +130,21 @@ function initGridFromMap(){
     if(!land){grid[y][x].type='water';continue;}
     const ms=getMtn(nx,ny,W);
     const fs=getFst(nx,ny,W);
+    const hs=getHill(nx,ny);
+    const ds=getDesert(nx,ny);
     if(ms>0.72||(ny<0.15&&ms>0.2)) grid[y][x].type='snow';
     else if(ms>0.45) grid[y][x].type='mountain';
     else if(ms>0.2) grid[y][x].type='rock';
     else{
+      // Wider beach: 4-pixel coast
       const coast=!isLand(x-1,y)||!isLand(x+1,y)||!isLand(x,y-1)||!isLand(x,y+1)||
-                  !isLand(x-2,y)||!isLand(x+2,y)||!isLand(x,y-2)||!isLand(x,y+2);
+                  !isLand(x-2,y)||!isLand(x+2,y)||!isLand(x,y-2)||!isLand(x,y+2)||
+                  !isLand(x-3,y)||!isLand(x+3,y)||!isLand(x,y-3)||!isLand(x,y+3)||
+                  !isLand(x-4,y)||!isLand(x+4,y)||!isLand(x,y-4)||!isLand(x,y+4);
       if(coast) grid[y][x].type='sand';
+      else if(ds>0.55) grid[y][x].type='desert';
       else if(fs>0.35) grid[y][x].type=ny<0.3?'pine':'tree';
+      else if(hs>0.45&&ms<0.15) grid[y][x].type='hill';
       else grid[y][x].type='grass';
     }
   }

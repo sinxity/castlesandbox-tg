@@ -30,15 +30,94 @@ const MTNS=[
   {p:[g(38,43),g(40,43),g(42,43),g(44,42.5)],w:0.015},
 ];
 const FORESTS=[
-  {c:g(15,52),r:0.07},{c:g(25,62),r:0.06},{c:g(10,64),r:0.05},
-  {c:g(30,58),r:0.06},{c:g(5,48),r:0.04},{c:g(-4,43),r:0.035},
-  {c:g(22,48),r:0.04},{c:g(38,55),r:0.05},
+  {c:g(15,52),r:0.07},  // Polish/Belarusian forests
+  {c:g(25,62),r:0.06},  // Finnish boreal
+  {c:g(10,64),r:0.05},  // Norwegian/Swedish boreal
+  {c:g(30,58),r:0.06},  // Russian taiga
+  {c:g(5,48), r:0.04},  // Vosges/Jura
+  {c:g(-4,43),r:0.035}, // NW Iberia
+  {c:g(22,48),r:0.04},  // Transylvania/Carpathians
+  {c:g(38,55),r:0.05},  // Ural forests
+  {c:g(8,48), r:0.022}, // Black Forest
+  {c:g(5,58), r:0.055}, // Scandinavian south boreal
+  {c:g(20,65),r:0.065}, // Finnish/Russian boreal belt
+  {c:g(35,63),r:0.055}, // Russian north taiga
+  {c:g(-7,43),r:0.025}, // Galicia/Portugal
+  {c:g(23,45),r:0.03},  // Romanian forests
+  {c:g(16,49),r:0.025}, // Bohemian Forest (Šumava)
+  {c:g(40,52),r:0.04},  // East Ural/Siberia edge
+  {c:g(12,48),r:0.02},  // Austrian/Bavarian forest
+  {c:g(28,55),r:0.04},  // Baltic forests
 ];
 const RIVERS=[
-  [g(8,47.5),g(7.5,49),g(6.5,51),g(4,52)],
-  [g(10,48),g(14,48),g(17,48),g(19,47.5),g(22,47),g(24,46),g(26,45),g(29,45.5),g(30,46)],
-  [g(14,50.5),g(12,52),g(10,53.5)],
-  [g(4,47),g(2,47.5),g(0,47.5),g(-2,47.5)],
-  [g(7,46),g(5,44.5),g(4,43.5),g(4,43)],
-  [g(19,49.5),g(20,51),g(21,52.5),g(21,54.5)],
+  // Rhine
+  [g(9,47.5),g(8.5,48.5),g(8,49.5),g(7,50.5),g(6.5,51),g(5,51.5),g(4,52)],
+  // Danube
+  [g(10,48),g(13,48.2),g(15,48.5),g(17,48),g(19,47.5),g(22,47),g(24,46),g(26,45),g(28,45.5),g(29,45.5),g(30,46)],
+  // Elbe
+  [g(14,50.5),g(13,51.5),g(12,52),g(11,53),g(10,53.5)],
+  // Loire
+  [g(4,47),g(2,47.5),g(0.5,47.5),g(-1,47.3),g(-2,47)],
+  // Rhône
+  [g(7,46),g(6,45),g(5,44.5),g(4.5,43.5),g(4,43)],
+  // Vistula
+  [g(19,49.5),g(20,51),g(21,52),g(21,53),g(20.5,54.5)],
+  // Oder
+  [g(15,51),g(14.5,52),g(14.3,53),g(14,54)],
+  // Po
+  [g(7.5,45.5),g(9,44.8),g(11,44.6),g(12.5,44.7),g(13.5,45)],
+  // Ebro
+  [g(-2,42.8),g(-0.5,41.5),g(1,40.7)],
+  // Seine
+  [g(4.5,47.5),g(3,48),g(1.5,48.8),g(0.5,49.3),g(-2,49)],
+  // Dnieper
+  [g(33,54),g(32,52),g(32.5,50),g(33,48),g(32,46.5)],
+  // Don
+  [g(40,54),g(41,51),g(40,48.5),g(40,47.5)],
+  // Volga
+  [g(36,57),g(37,56),g(38,54),g(40,52),g(41,50),g(42,48),g(43,47)],
+  // Tagus/Tejo
+  [g(-4,40.5),g(-6,39.5),g(-7.5,39),g(-8.8,38.7)],
+  // Thames
+  [g(0,51.5),g(-0.5,51.5),g(-1,51.5)],
+  // Tiber
+  [g(12,43),g(12.5,42),g(12.2,41.9)],
+  // Dniester
+  [g(27,50),g(28,48.5),g(30,47),g(30.5,46.5)],
+  // Ural (southern reach)
+  [g(39,56),g(40,55),g(40.5,53),g(41,51)],
+  // Neva (outflow of Ladoga)
+  [g(31,60),g(30.5,59.9),g(30,59.8)],
+];
+
+const LAKES=[
+  {c:g(32,61),  r:0.016}, // Ladoga
+  {c:g(35,62),  r:0.012}, // Onega
+  {c:g(28,61.5),r:0.008}, // Saimaa
+  {c:g(13,58.8),r:0.008}, // Vänern
+  {c:g(14,57.5),r:0.005}, // Vättern
+  {c:g(6.5,46.5),r:0.005}, // Geneva
+  {c:g(18,47),  r:0.006}, // Balaton
+  {c:g(9.2,46), r:0.004}, // Como
+  {c:g(16,54.2),r:0.004}, // Müritz
+];
+
+const HILLS=[
+  {c:g(2.5,45),  r:0.045}, // Massif Central
+  {c:g(5.5,50),  r:0.028}, // Ardennes
+  {c:g(14,50),   r:0.032}, // Bohemian/Sudeten hills
+  {c:g(24,49),   r:0.045}, // Carpathian foothills
+  {c:g(-3,40),   r:0.04},  // Iberian meseta
+  {c:g(40,56),   r:0.045}, // Ural foothills
+  {c:g(20,43),   r:0.03},  // Balkan hills
+  {c:g(6,52),    r:0.028}, // German low hills (Mittelgebirge)
+  {c:g(30,55),   r:0.038}, // Russian central hills
+  {c:g(15,57),   r:0.03},  // Swedish lowlands
+];
+
+const DESERTS=[
+  {c:g(-2,37.5), r:0.028}, // SE Spain / Almería
+  {c:g(33,39),   r:0.042}, // Anatolian plateau
+  {c:g(-5,35.5), r:0.02},  // N Morocco coast
+  {c:g(38,37),   r:0.025}, // Syrian/Turkish border
 ];
