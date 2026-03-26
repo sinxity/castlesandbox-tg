@@ -114,10 +114,15 @@ function setupEvents(){
   });
 
   let tapStartTime=0,tapStartX=0,tapStartY=0;
+  let recentTouch=false,recentTouchTimer=null;
 
   wrap.addEventListener('touchstart',e=>{
     // CRITICAL FIX: don't intercept touches on topbar buttons or minimap
     // e.preventDefault() kills synthetic click events, breaking buttons
+    // Mark recent touch so synthetic mouseup doesn't fire checkCastleTap
+    recentTouch=true;
+    clearTimeout(recentTouchTimer);
+    recentTouchTimer=setTimeout(()=>{recentTouch=false;},600);
     if(isUITouch(e)) return;
     e.preventDefault();
     initAudio();
@@ -195,8 +200,9 @@ function setupEvents(){
     }
   },{passive:false});
 
-  let mouseDownX=0,mouseDownY=0;
+  let mouseDownX=0,mouseDownY=0,mouseDownTime=0;
   wrap.addEventListener('mousedown',e=>{
+    if(recentTouch) return; // ignore synthetic mouse events from touch
     initAudio();
     mouseDownX=e.clientX;mouseDownY=e.clientY;
     if(curTool===null){
@@ -208,7 +214,7 @@ function setupEvents(){
     }
   });
   wrap.addEventListener('mousemove',e=>{
-    if(!isDrawing) return;
+    if(recentTouch||!isDrawing) return;
     if(curTool===null){
       camX=panStartCamX-(e.clientX-panStartX);
       camY=panStartCamY-(e.clientY-panStartY);
@@ -218,13 +224,14 @@ function setupEvents(){
     }
   });
   wrap.addEventListener('mouseup',e=>{
+    if(recentTouch) return; // ignore synthetic mouse events from touch
     isDrawing=false;
     if(curTool===null&&Math.hypot(e.clientX-mouseDownX,e.clientY-mouseDownY)<6){
       const pos=screenToCanvas(e.clientX,e.clientY);
       checkCastleTap(pos.x,pos.y);
     }
   });
-  wrap.addEventListener('mouseleave',()=>{isDrawing=false;});
+  wrap.addEventListener('mouseleave',()=>{if(!recentTouch) isDrawing=false;});
   wrap.addEventListener('wheel',e=>{
     e.preventDefault();
     const delta=e.deltaY>0?0.9:1.1;
