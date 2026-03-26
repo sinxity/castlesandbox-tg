@@ -139,7 +139,7 @@ function placeCastle(cx,cy,team){
   const c={nx:cx/W,ny:cy/H,team,power:50,radius:6,cells:[],attackCooldown:0,craftTimer:0,level:1,xp:0,castleHp:100};
   computeTerritory(c);castles.push(c);
   rebuildTerritories();
-  RES[team]={wood:0,stone:0,iron:0,swords:0,armor:0,knights:0};
+  RES[team]={wood:8,stone:8,iron:3,swords:0,armor:0,knights:0};
   let n=0;
   for(let dy=-20;dy<=20&&n<10;dy++) for(let dx=-20;dx<=20&&n<10;dx++){
     const nx2=cx+dx,ny2=cy+dy;

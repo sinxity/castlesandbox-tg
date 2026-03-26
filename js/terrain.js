@@ -2,11 +2,10 @@
 function initBase(){
   canvas=document.getElementById('gc');
   wrap=document.getElementById('cw');
-  // Landscape rectangle map: use the longer screen dimension as the map width
-  // so the world is wider than tall (like a real map)
+  // Landscape rectangle map — capped for mobile performance
   const dim=Math.max(wrap.clientWidth,wrap.clientHeight);
-  W=Math.floor(dim*4);
-  H=Math.floor(dim*3);
+  W=Math.min(1600,Math.floor(dim*2.5));
+  H=Math.min(1200,Math.floor(dim*1.8));
   canvas.width=W;canvas.height=H;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.style.transformOrigin='0 0';
@@ -39,7 +38,7 @@ function buildMask(onDone){
   landMask=new Uint8Array(W*H);
   let y=0;
   function step(){
-    const end=Math.min(y+12,H);
+    const end=Math.min(y+40,H);
     for(;y<end;y++) for(let x=0;x<W;x++){
       if(useEurope){
         for(const poly of POLYS){

@@ -653,8 +653,8 @@ function updateMinimap(){
   });
   // Viewport rectangle
   if(wrap){
-    const vx=Math.max(0,Math.floor(camX*mw/W));
-    const vy=Math.max(0,Math.floor(camY*mh/H));
+    const vx=Math.max(0,Math.floor((camX/camZ)*mw/W));
+    const vy=Math.max(0,Math.floor((camY/camZ)*mh/H));
     const vw2=Math.min(mw-vx,Math.ceil(wrap.clientWidth/camZ*mw/W));
     const vh2=Math.min(mh-vy,Math.ceil(wrap.clientHeight/camZ*mh/H));
     mc.strokeStyle='rgba(255,255,255,0.85)';mc.lineWidth=1;
