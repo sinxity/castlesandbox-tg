@@ -61,7 +61,7 @@ function updateStats(){
     document.getElementById('res-knights').textContent=r.knights||0;
   }
   const dt=dayTime;
-  const dayLabel=dt<0.25?'День':dt<0.5?'Закат':dt<0.75?'Ночь':'Рассвет';
+  const dayLabel=dt<0.55?'День':dt<0.7?'Закат':dt<0.8?'Ночь':'Рассвет';
   document.getElementById('day-time').textContent=dayLabel;
   const dcEl=document.getElementById('day-count');
   if(dcEl) dcEl.textContent=dayCount;
@@ -248,8 +248,9 @@ function renderTools(){
       updateBrushVisibility();
     };
     // stopPropagation prevents the wrap touchstart from also firing
-    el.addEventListener('touchstart',ev=>{ev.stopPropagation();selectTool();},{passive:true});
-    el.addEventListener('click',selectTool);
+    // passive:false + preventDefault stops the click from also firing after touchstart
+    el.addEventListener('touchstart',ev=>{ev.stopPropagation();ev.preventDefault();selectTool();},{passive:false});
+    el.addEventListener('click',selectTool); // handles mouse-only (no touch)
     box.appendChild(el);
   });
 }

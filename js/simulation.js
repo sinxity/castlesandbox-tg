@@ -43,6 +43,29 @@ function placeSprite(cx,cy){
     if(!cell) continue;
     cell.type=curTool;cell.owner=null;
     terrainDirty=true;
+    // House placed in a castle's territory → +5 workers for that faction
+    if(curTool==='house'){
+      for(const castle of castles){
+        const kcx=Math.round(castle.nx*W),kcy=Math.round(castle.ny*H);
+        const maxD=Math.round(castle.radius*Math.min(W,H)/100);
+        if(Math.hypot(sx-kcx,sy-kcy)<=maxD){
+          cell.owner=castle.team;
+          let spawned=0;
+          for(let dy=-18;dy<=18&&spawned<5;dy++) for(let dx=-18;dx<=18&&spawned<5;dx++){
+            const nx2=sx+dx,ny2=sy+dy;
+            if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+            if(isLand(nx2,ny2)&&Math.random()<0.35){
+              bots.push({x:nx2,y:ny2,team:castle.team,hp:5,maxhp:5,
+                timer:Math.floor(Math.random()*20),isKnight:false,
+                carrying:null,res:0,homeX:kcx,homeY:kcy,state:'seek'});
+              spawned++;
+            }
+          }
+          if(spawned>0) logEvent('🏠 +'+spawned+' жителей ('+castle.team+')');
+          break;
+        }
+      }
+    }
   }
   lastPaintPos={x:cx,y:cy};
 }
@@ -181,19 +204,61 @@ function updateCastles(){
         if(tr.wood>5){tr.wood-=3;ar.iron=(ar.iron||0)+2;logEvent('🤝 Золотые торгуют с '+ally.team);}
       }
     }
-    if(trait.buildSpeed>0&&c.craftTimer%Math.floor(200/trait.buildSpeed)===0&&RES[c.team].wood>=2){
-      const hx=Math.round(c.nx*W),hy=Math.round(c.ny*H);
-      const R2=Math.round(c.radius*Math.min(W,H)/100*0.6);
-      for(let attempt=0;attempt<8;attempt++){
-        const bx=Math.floor((hx+Math.floor(Math.random()*R2*2-R2))/8)*8;
-        const by=Math.floor((hy+Math.floor(Math.random()*R2*2-R2))/8)*8;
-        if(bx<0||by<0||bx>=W||by>=H) continue;
-        const bc=grid[by]&&grid[by][bx];
-        if(!bc||!WALKABLE.has(bc.type)) continue;
-        const buildType=Math.random()<0.4?'wall':'house';
-        bc.type=buildType;bc.owner=c.team;
-        RES[c.team].wood=Math.max(0,RES[c.team].wood-2);
-        break;
+    // ALL factions auto-build; speed scales with level + trait.buildSpeed
+    const bspd=1+(TRAITS[c.team]?.buildSpeed||0)+(c.level||1);
+    if(c.craftTimer%Math.max(15,Math.floor(100/bspd))===0){
+      const rb=RES[c.team];
+      if(rb.wood>=1||rb.stone>=1){
+        const bhx=Math.round(c.nx*W),bhy=Math.round(c.ny*H);
+        const BR=Math.round(c.radius*Math.min(W,H)/100*0.78);
+        for(let attempt=0;attempt<12;attempt++){
+          const angle=Math.random()*Math.PI*2;
+          const dist=BR*(0.2+Math.random()*0.75);
+          const bx2=Math.floor((bhx+Math.cos(angle)*dist)/10)*10;
+          const by2=Math.floor((bhy+Math.sin(angle)*dist)/10)*10;
+          if(bx2<0||by2<0||bx2>=W||by2>=H) continue;
+          const bc=grid[by2]&&grid[by2][bx2];
+          if(!bc||!WALKABLE.has(bc.type)) continue;
+          const rnd=Math.random();
+          if(rnd<0.35&&rb.stone>=1){
+            bc.type='wall';bc.owner=c.team;rb.stone--;
+          } else if(rnd<0.62&&rb.wood>=1){
+            bc.type='house';bc.owner=c.team;rb.wood--;
+            // New house in territory → bonus workers
+            let sp=0;
+            for(let dy=-12;dy<=12&&sp<3;dy++) for(let dx=-12;dx<=12&&sp<3;dx++){
+              const nx2=bx2+dx,ny2=by2+dy;
+              if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+              if(isLand(nx2,ny2)&&Math.random()<0.25){
+                bots.push({x:nx2,y:ny2,team:c.team,hp:5,maxhp:5,
+                  timer:Math.floor(Math.random()*20),isKnight:false,
+                  carrying:null,res:0,homeX:bhx,homeY:bhy,state:'seek'});
+                sp++;
+              }
+            }
+          } else if(rnd<0.72&&rb.wood>=1&&rb.stone>=1&&(c.level||1)>=2){
+            bc.type='gate';bc.owner=c.team;rb.wood--;rb.stone--;
+          } else if(rb.stone>=1){
+            bc.type='wall';bc.owner=c.team;rb.stone--;
+          } else if(rb.wood>=1){
+            bc.type='house';bc.owner=c.team;rb.wood--;
+          } else break;
+          terrainDirty=true;break;
+        }
+        // Level 3+: build corner tower clusters (3x3 wall groups)
+        if((c.level||1)>=3&&rb.stone>=4&&c.craftTimer%Math.floor(400/bspd)===0){
+          const corners=[[-1,-1],[1,-1],[-1,1],[1,1]];
+          const ci=Math.floor(c.craftTimer/Math.floor(400/bspd))%4;
+          const [tcx,tcy]=corners[ci];
+          const td=BR*0.88;
+          const tx=Math.round(bhx+tcx*td),ty=Math.round(bhy+tcy*td);
+          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+            const wx=Math.floor((tx+dx*10)/10)*10,wy=Math.floor((ty+dy*10)/10)*10;
+            if(wx<0||wy<0||wx>=W||wy>=H||rb.stone<1) continue;
+            const wc=grid[wy]&&grid[wy][wx];
+            if(wc&&WALKABLE.has(wc.type)){wc.type='wall';wc.owner=c.team;rb.stone--;terrainDirty=true;}
+          }
+        }
       }
     }
     const gr=TRAITS[c.team]||TRAITS.red;

@@ -520,15 +520,16 @@ function updateDayNight(){
   dayTime=(dayTime+daySpeed)%1;
   const t=dayTime;
   let alpha,r,g,b;
-  if(t<0.3){alpha=0;r=0;g=0;b=0;}
-  else if(t<0.5){
-    const p=(t-0.3)/0.2;
-    alpha=p*0.55;r=20;g=10;b=40;
-  } else if(t<0.7){
-    alpha=0.55;r=5;g=5;b=30;
-  } else if(t<0.9){
-    const p=1-(t-0.7)/0.2;
-    alpha=p*0.55;r=20;g=10;b=40;
+  // Day 55%, sunset 15%, night 10%, dawn 15%, day 5%
+  if(t<0.55){alpha=0;r=0;g=0;b=0;}
+  else if(t<0.7){
+    const p=(t-0.55)/0.15;
+    alpha=p*0.5;r=20;g=10;b=40;
+  } else if(t<0.8){
+    alpha=0.5;r=5;g=5;b=30;
+  } else if(t<0.95){
+    const p=1-(t-0.8)/0.15;
+    alpha=p*0.5;r=20;g=10;b=40;
   } else {alpha=0;r=0;g=0;b=0;}
 
   if(alpha>0.01){
