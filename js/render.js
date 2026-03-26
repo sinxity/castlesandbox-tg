@@ -663,8 +663,12 @@ function updateMinimap(){
 }
 
 // ── MAIN RENDER ───────────────────────────────────────────────
+let _terrainRebuildFrame=0;
 function render(){
-  if(terrainDirty||!terrainCache) buildTerrainCache();
+  // Rate-limit terrain rebuilds: at most once every 3 frames during active painting
+  // to avoid O(W*H) stall every frame while dragging
+  if(!terrainCache) buildTerrainCache();
+  else if(terrainDirty){_terrainRebuildFrame++;if(_terrainRebuildFrame>=3){buildTerrainCache();_terrainRebuildFrame=0;}}
   ctx.drawImage(terrainCache,0,0);
 
   // Animate fire/lava (always dynamic)

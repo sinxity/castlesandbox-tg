@@ -140,6 +140,14 @@ function placeCastle(cx,cy,team){
   computeTerritory(c);castles.push(c);
   rebuildTerritories();
   RES[team]={wood:8,stone:8,iron:3,swords:0,armor:0,knights:0};
+  // Clear rocky terrain around castle so buildings can be placed
+  for(let dy=-50;dy<=50;dy++) for(let dx=-50;dx<=50;dx++){
+    if(dx*dx+dy*dy>50*50) continue;
+    const nx2=cx+dx,ny2=cy+dy;
+    if(nx2<0||ny2<0||nx2>=W||ny2>=H) continue;
+    const cell=grid[ny2]&&grid[ny2][nx2];
+    if(cell&&(cell.type==='rock'||cell.type==='mountain'||cell.type==='snow')) cell.type='grass';
+  }
   let n=0;
   for(let dy=-20;dy<=20&&n<10;dy++) for(let dx=-20;dx<=20&&n<10;dx++){
     const nx2=cx+dx,ny2=cy+dy;
@@ -255,17 +263,17 @@ function updateCastles(){
       }
       // Decide what to build based on need and level
       let buildType=null;
-      if(lv>=2&&farmCount<2&&rb.wood>=1) buildType='farm';
-      else if(lv>=3&&smithyCount<1&&rb.stone>=1) buildType='smithy';
-      else if(lv>=3&&barracksCount<1&&rb.stone>=1) buildType='barracks';
-      else if(lv>=4&&marketCount<1&&rb.wood>=1) buildType='market';
-      else if(lv>=3&&towerCount<lv&&rb.stone>=1) buildType='tower';
+      if(lv>=1&&farmCount<2&&rb.wood>=1) buildType='farm';
+      else if(lv>=2&&smithyCount<1&&rb.stone>=1) buildType='smithy';
+      else if(lv>=2&&barracksCount<1&&rb.stone>=1) buildType='barracks';
+      else if(lv>=3&&marketCount<1&&rb.wood>=1) buildType='market';
+      else if(lv>=2&&towerCount<lv&&rb.stone>=1) buildType='tower';
       else if(rb.stone>=1) buildType='wall';
       else if(rb.wood>=1) buildType='house';
       if(buildType){
-        for(let attempt=0;attempt<15;attempt++){
+        for(let attempt=0;attempt<40;attempt++){
           const angle=Math.random()*Math.PI*2;
-          const dist=BR*(0.15+Math.random()*0.8);
+          const dist=BR*(0.1+Math.random()*0.9);
           const bx2=Math.floor((bhx+Math.cos(angle)*dist)/16)*16;
           const by2=Math.floor((bhy+Math.sin(angle)*dist)/16)*16;
           if(bx2<2||by2<2||bx2>=W-2||by2>=H-2) continue;
